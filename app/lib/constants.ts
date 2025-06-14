@@ -40,6 +40,7 @@ export const STT_LANGUAGE_LIST = [
   { label: "Korean", value: "ko", key: "ko" },
   { label: "Malay", value: "ms", key: "ms" },
   { label: "Norwegian", value: "no", key: "no" },
+  { label: "Persian", value: "fa", key: "fa" },
   { label: "Polish", value: "pl", key: "pl" },
   { label: "Portuguese", value: "pt", key: "pt" },
   { label: "Romanian", value: "ro", key: "ro" },

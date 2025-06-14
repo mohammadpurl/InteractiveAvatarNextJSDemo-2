@@ -43,8 +43,7 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   sttSettings: {
     provider: STTProvider.GLADIA,
   },
-  version: 'v2'
-  
+  version: "v2",
 };
 
 function InteractiveAvatar() {
