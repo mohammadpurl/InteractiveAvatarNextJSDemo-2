@@ -173,7 +173,7 @@ function InteractiveAvatar() {
       await startAvatar(config);
 
       if (isVoiceChat) {
-        // await startVoiceChat(true); // قطع STT پیش‌فرض
+        await startVoiceChat(true); // قطع STT پیش‌فرض
         initGladiaSocket();
         startMicrophoneStream();
       }
