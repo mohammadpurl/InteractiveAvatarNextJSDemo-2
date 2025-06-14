@@ -14,8 +14,6 @@ import { AvatarConfig } from "./AvatarConfig";
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { AvatarControls } from "./AvatarSession/AvatarControls";
-import { useSpeechFilter } from "./logic/useSpeechFilter";
-import { useAudioFilter } from "./logic/useAudioFilter";
 import {
   StreamingAvatarProvider,
   StreamingAvatarSessionState,
@@ -43,157 +41,86 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   knowledgeBase: knowledgeBase,
   knowledgeId: "1629692875c84134abd4e37325cf7535",
   voiceChatTransport: VoiceChatTransport.WEBSOCKET,
-  // sttSettings: {
-  //   provider: STTProvider.GLADIA,
-  // },
-  sttSettings: undefined,
   version: "v2",
-  useSilencePrompt: true,
 };
 
 function InteractiveAvatar() {
-  const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
-    useStreamingAvatarSession();
+  const { initAvatar, startAvatar, stopAvatar, sessionState, stream } = useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
-  const { handleUserStart, handleUserStop } = useSpeechFilter();
-  const { startFiltering, stopFiltering } = useAudioFilter();
+  const [config, setConfig] = useState(DEFAULT_CONFIG);
 
-  const [config, setConfig] =
-    useState<ExtendedStartAvatarRequest>(DEFAULT_CONFIG);
   const mediaStream = useRef<HTMLVideoElement>(null);
-
+  const avatarRef = useRef<any>(null);
   const gladiaSocketRef = useRef<WebSocket | null>(null);
 
   const applyFilter = (text: string): string => {
     if (text.includes("موسیقی")) return "";
-
     return text;
   };
-  const avatarRef = useRef<any>(null);
 
   const initGladiaSocket = () => {
-    // اگر سوکت در حالت CONNECTING یا OPEN است، ببندش
-    if (
-      gladiaSocketRef.current &&
-      (gladiaSocketRef.current.readyState === WebSocket.OPEN ||
-        gladiaSocketRef.current.readyState === WebSocket.CONNECTING)
-    ) {
-      gladiaSocketRef.current.close();
-    }
-
     gladiaSocketRef.current = new WebSocket("wss://api.gladia.io/audio");
-
     gladiaSocketRef.current.onopen = () => {
-      console.log("Gladia WebSocket connected");
       gladiaSocketRef.current?.send(
         JSON.stringify({
           x_gladia_key: process.env.NEXT_PUBLIC_GLADIA_API_KEY,
           language: "fa",
-        }),
+        })
       );
     };
 
     gladiaSocketRef.current.onmessage = (event) => {
       const result = JSON.parse(event.data);
-
       if (!result.transcription) return;
 
-      const transcript = result.transcription;
+      const filteredText = applyFilter(result.transcription);
+      if (!filteredText) return;
 
-      // اگر محتوای ممنوعه است، هیچ کاری نکن
-      if (transcript.includes("موسیقی")) return;
-
-      // در غیر این صورت اجرا کن
-      avatarRef.current?.speak({ text: transcript, task_type: "REPEAT" });
-    };
-
-    gladiaSocketRef.current.onerror = (err) => {
-      console.error("Gladia WebSocket error:", err);
-    };
-    gladiaSocketRef.current.onclose = () => {
-      console.warn("Gladia WebSocket closed");
+      // مستقیماً جمله را به آواتار بده
+      avatarRef.current?.speak({ text: filteredText, task_type: "REPEAT" });
     };
   };
 
   const startMicrophoneStream = async () => {
-    const micStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-    });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const audioCtx = new AudioContext();
-    const source = audioCtx.createMediaStreamSource(micStream);
-    const proc = audioCtx.createScriptProcessor(4096, 1, 1);
+    const source = audioCtx.createMediaStreamSource(stream);
+    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
 
-    source.connect(proc);
-    proc.connect(audioCtx.destination);
+    source.connect(processor);
+    processor.connect(audioCtx.destination);
 
-    proc.onaudioprocess = (e) => {
-      const fl = e.inputBuffer.getChannelData(0);
-      const int16 = new Int16Array(fl.length);
-
-      for (let i = 0; i < fl.length; i++) {
-        int16[i] = fl[i] * 32767;
+    processor.onaudioprocess = (e) => {
+      const float32 = e.inputBuffer.getChannelData(0);
+      const int16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        int16[i] = float32[i] * 32767;
       }
-      if (gladiaSocketRef.current?.readyState === WebSocket.OPEN) {
-        gladiaSocketRef.current.send(int16.buffer);
-      }
+      gladiaSocketRef.current?.send(int16.buffer);
     };
   };
 
-  async function fetchAccessToken() {
-    try {
-      const response = await fetch("/api/get-access-token", {
-        method: "POST",
-      });
-      const token = await response.text();
+  const fetchAccessToken = async () => {
+    const res = await fetch("/api/get-access-token", { method: "POST" });
+    const token = await res.text();
+    return token;
+  };
 
-      console.log("Access Token:", token); // Log the token to verify
+  const startSession = useMemoizedFn(async () => {
+    const token = await fetchAccessToken();
+    const avatar = initAvatar(token);
 
-      return token;
-    } catch (error) {
-      console.error("Error fetching access token:", error);
-      throw error;
-    }
-  }
+    avatarRef.current = avatar;
 
-  const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
-    try {
-      const newToken = await fetchAccessToken();
-      const avatar = initAvatar(newToken);
+    avatar.on(StreamingEvents.AVATAR_START_TALKING, console.log);
+    avatar.on(StreamingEvents.AVATAR_STOP_TALKING, console.log);
+    avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => console.log("Disconnected"));
 
-      avatarRef.current = avatar;
+    await startAvatar(config);
+    await startVoiceChat({ isInputAudioMuted: true });
 
-      avatar.on(StreamingEvents.AVATAR_START_TALKING, console.log);
-      avatar.on(StreamingEvents.AVATAR_STOP_TALKING, console.log);
-      avatar.on(StreamingEvents.STREAM_DISCONNECTED, stopFiltering);
-      avatar.on(StreamingEvents.STREAM_READY, () => {
-        if (isVoiceChat) startFiltering();
-      });
-      avatar.on(StreamingEvents.USER_START, handleUserStart);
-      avatar.on(StreamingEvents.USER_STOP, handleUserStop);
-
-      await startAvatar(config);
-
-      if (isVoiceChat) {
-        await startVoiceChat(true); // قطع STT پیش‌فرض
-        initGladiaSocket();
-        startMicrophoneStream();
-      }
-    } catch (error) {
-      console.error("Error starting avatar session:", error);
-    }
-  });
-
-  // مدیریتUnmount
-  useUnmount(() => {
-    if (
-      gladiaSocketRef.current &&
-      gladiaSocketRef.current.readyState !== WebSocket.CLOSED
-    ) {
-      gladiaSocketRef.current.close();
-      gladiaSocketRef.current = null;
-    }
-    stopFiltering();
-    stopAvatar();
+    initGladiaSocket();
+    startMicrophoneStream();
   });
 
   useEffect(() => {
@@ -203,7 +130,12 @@ function InteractiveAvatar() {
         mediaStream.current!.play();
       };
     }
-  }, [mediaStream, stream]);
+  }, [stream]);
+
+  useUnmount(() => {
+    gladiaSocketRef.current?.close();
+    stopAvatar();
+  });
 
   return (
     <div className="w-full flex flex-col gap-4">
@@ -219,22 +151,13 @@ function InteractiveAvatar() {
           {sessionState === StreamingAvatarSessionState.CONNECTED ? (
             <AvatarControls />
           ) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
-            <div className="flex flex-row gap-4">
-              <Button onClick={() => startSessionV2(true)}>
-                Start Voice Chat
-              </Button>
-              <Button onClick={() => startSessionV2(false)}>
-                Start Text Chat
-              </Button>
-            </div>
+            <Button onClick={startSession}>شروع گفت‌وگو</Button>
           ) : (
             <LoadingIcon />
           )}
         </div>
       </div>
-      {sessionState === StreamingAvatarSessionState.CONNECTED && (
-        <MessageHistory />
-      )}
+      {sessionState === StreamingAvatarSessionState.CONNECTED && <MessageHistory />}
     </div>
   );
 }
