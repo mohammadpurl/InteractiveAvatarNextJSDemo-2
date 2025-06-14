@@ -117,7 +117,7 @@ function InteractiveAvatar() {
     avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => console.log("Disconnected"));
 
     await startAvatar(config);
-    await startVoiceChat({ isInputAudioMuted: true });
+    await startVoiceChat(true);
 
     initGladiaSocket();
     startMicrophoneStream();
