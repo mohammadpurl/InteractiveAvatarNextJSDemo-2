@@ -43,9 +43,10 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   knowledgeBase: knowledgeBase,
   knowledgeId: "1629692875c84134abd4e37325cf7535",
   voiceChatTransport: VoiceChatTransport.WEBSOCKET,
-  sttSettings: {
-    provider: STTProvider.GLADIA,
-  },
+  // sttSettings: {
+  //   provider: STTProvider.GLADIA,
+  // },
+  sttSettings: undefined,
   version: "v2",
   useSilencePrompt: true,
 };
