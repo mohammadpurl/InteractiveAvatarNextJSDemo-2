@@ -71,8 +71,19 @@ function InteractiveAvatar() {
   const avatarRef = useRef<any>(null);
 
   const initGladiaSocket = () => {
+    // اگر سوکت در حالت CONNECTING یا OPEN است، ببندش
+    if (
+      gladiaSocketRef.current &&
+      (gladiaSocketRef.current.readyState === WebSocket.OPEN ||
+       gladiaSocketRef.current.readyState === WebSocket.CONNECTING)
+    ) {
+      gladiaSocketRef.current.close();
+    }
+  
     gladiaSocketRef.current = new WebSocket("wss://api.gladia.io/audio");
+  
     gladiaSocketRef.current.onopen = () => {
+      console.log("Gladia WebSocket connected");
       gladiaSocketRef.current?.send(
         JSON.stringify({
           x_gladia_key: process.env.NEXT_PUBLIC_GLADIA_API_KEY,
@@ -80,36 +91,46 @@ function InteractiveAvatar() {
         })
       );
     };
+  
     gladiaSocketRef.current.onmessage = (event) => {
-      const result = JSON.parse(event.data);
+      const data = JSON.parse(event.data);
 
-      if (result.transcription) {
-        const filteredText = applyFilter(result.transcription);
+      if (data.transcription) {
+        const filtered = applyFilter(data.transcription);
 
-        if (filteredText) {
-          avatarRef.current?.speak({ text: filteredText, task_type: "REPEAT" });
+        if (filtered && avatarRef.current?.speak) {
+          avatarRef.current.speak({ text: filtered, task_type: "REPEAT" });
         }
       }
+    };
+  
+    gladiaSocketRef.current.onerror = (err) => {
+      console.error("Gladia WebSocket error:", err);
+    };
+    gladiaSocketRef.current.onclose = () => {
+      console.warn("Gladia WebSocket closed");
     };
   };
 
   const startMicrophoneStream = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const audioCtx = new AudioContext();
-    const source = audioCtx.createMediaStreamSource(stream);
-    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    const source = audioCtx.createMediaStreamSource(micStream);
+    const proc = audioCtx.createScriptProcessor(4096, 1, 1);
+  
+    source.connect(proc);
+    proc.connect(audioCtx.destination);
+  
+    proc.onaudioprocess = (e) => {
+      const fl = e.inputBuffer.getChannelData(0);
+      const int16 = new Int16Array(fl.length);
 
-    source.connect(processor);
-    processor.connect(audioCtx.destination);
-
-    processor.onaudioprocess = (e) => {
-      const float32 = e.inputBuffer.getChannelData(0);
-      const int16 = new Int16Array(float32.length);
-
-      for (let i = 0; i < float32.length; i++) {
-        int16[i] = float32[i] * 32767;
+      for (let i = 0; i < fl.length; i++) {
+        int16[i] = fl[i] * 32767;
       }
-      gladiaSocketRef.current?.send(int16.buffer);
+      if (gladiaSocketRef.current?.readyState === WebSocket.OPEN) {
+        gladiaSocketRef.current.send(int16.buffer);
+      }
     };
   };
 
@@ -158,6 +179,13 @@ function InteractiveAvatar() {
   });
 
   useUnmount(() => {
+    if (
+      gladiaSocketRef.current &&
+      gladiaSocketRef.current.readyState !== WebSocket.CLOSED
+    ) {
+      gladiaSocketRef.current.close();
+      gladiaSocketRef.current = null;
+    }
     stopFiltering();
     stopAvatar();
   });
