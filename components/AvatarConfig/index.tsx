@@ -14,21 +14,22 @@ import { Select } from "../Select";
 import { Field } from "./Field";
 
 import { AVATARS, STT_LANGUAGE_LIST } from "@/app/lib/constants";
+import { ExtendedStartAvatarRequest } from "../logic/ExtendedTypes";
 
 interface AvatarConfigProps {
-  onConfigChange: (config: StartAvatarRequest) => void;
-  config: StartAvatarRequest;
+  onConfigChange: (config: ExtendedStartAvatarRequest) => void;
+  config: ExtendedStartAvatarRequest;
 }
 
 export const AvatarConfig: React.FC<AvatarConfigProps> = ({
   onConfigChange,
   config,
-}) => {
-  const onChange = <T extends keyof StartAvatarRequest>(
+}: AvatarConfigProps) => {
+  const onChange = <T extends keyof ExtendedStartAvatarRequest>(
     key: T,
-    value: StartAvatarRequest[T],
+    value: ExtendedStartAvatarRequest[T],
   ) => {
-    onConfigChange({ ...config, [key]: value });
+    onConfigChange({ ...config, [key]: value, version: 'v2' });
   };
   const [showMore, setShowMore] = useState<boolean>(false);
 
