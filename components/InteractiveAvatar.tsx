@@ -37,6 +37,7 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   sttSettings: {
     provider: STTProvider.DEEPGRAM,
   },
+  version: "v2",
 };
 
 function InteractiveAvatar() {
