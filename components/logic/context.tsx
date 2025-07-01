@@ -3,7 +3,7 @@ import StreamingAvatar, {
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
 } from "@heygen/streaming-avatar";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useCallback } from "react";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -61,6 +61,9 @@ type StreamingAvatarContextProps = {
 
   connectionQuality: ConnectionQuality;
   setConnectionQuality: (connectionQuality: ConnectionQuality) => void;
+
+  lastAvatarMessage: string;
+  setLastAvatarMessage: (lastAvatarMessage: string) => void;
 };
 
 const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
@@ -89,6 +92,8 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     setIsAvatarTalking: () => {},
     connectionQuality: ConnectionQuality.UNKNOWN,
     setConnectionQuality: () => {},
+    lastAvatarMessage: "",
+    setLastAvatarMessage: () => {},
   },
 );
 
@@ -121,7 +126,9 @@ const useStreamingAvatarVoiceChatState = () => {
   };
 };
 
-const useStreamingAvatarMessageState = () => {
+const useStreamingAvatarMessageState = (
+  setLastAvatarMessage: (msg: string) => void,
+) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const currentSenderRef = useRef<MessageSender | null>(null);
 
@@ -151,11 +158,8 @@ const useStreamingAvatarMessageState = () => {
     }
   };
 
-  const handleStreamingTalkingMessage = ({
-    detail,
-  }: {
-    detail: StreamingTalkingMessageEvent;
-  }) => {
+  const handleStreamingTalkingMessage = useCallback(({ detail }) => {
+    
     if (currentSenderRef.current === MessageSender.AVATAR) {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -164,6 +168,10 @@ const useStreamingAvatarMessageState = () => {
           content: [prev[prev.length - 1].content, detail.message].join(""),
         },
       ]);
+
+      setLastAvatarMessage(
+        messages.length > 0 ? messages[messages.length - 1].content : "",
+      );
     } else {
       currentSenderRef.current = MessageSender.AVATAR;
       setMessages((prev) => [
@@ -175,7 +183,7 @@ const useStreamingAvatarMessageState = () => {
         },
       ]);
     }
-  };
+  }, []);
 
   const handleEndMessage = () => {
     currentSenderRef.current = null;
@@ -229,7 +237,8 @@ export const StreamingAvatarProvider = ({
   const avatarRef = React.useRef<StreamingAvatar>(null);
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
-  const messageState = useStreamingAvatarMessageState();
+  const [lastAvatarMessage, setLastAvatarMessage] = useState<string>("");
+  const messageState = useStreamingAvatarMessageState(setLastAvatarMessage);
   const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
@@ -245,6 +254,8 @@ export const StreamingAvatarProvider = ({
         ...listeningState,
         ...talkingState,
         ...connectionQualityState,
+        lastAvatarMessage,
+        setLastAvatarMessage,
       }}
     >
       {children}

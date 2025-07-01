@@ -1,4 +1,4 @@
-import {
+import StreamingAvatar, {
   AvatarQuality,
   StreamingEvents,
   VoiceChatTransport,
@@ -6,14 +6,17 @@ import {
   STTProvider,
   ElevenLabsModel,
 } from "@heygen/streaming-avatar";
-import { useEffect, useRef, useState } from "react";
+import { SetStateAction, useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
+
+import { askQuestion } from "../services/api";
 
 import { Button } from "./Button";
 import { AvatarConfig } from "./AvatarConfig";
 import { AvatarVideo } from "./AvatarSession/AvatarVideo";
 import { useStreamingAvatarSession } from "./logic/useStreamingAvatarSession";
 import { AvatarControls } from "./AvatarSession/AvatarControls";
+// import { useVoiceChat } from "./logic/useVoiceChat";
 import {
   StreamingAvatarProvider,
   StreamingAvatarSessionState,
@@ -22,6 +25,11 @@ import {
 import { LoadingIcon } from "./Icons";
 import { MessageHistory } from "./AvatarSession/MessageHistory";
 import { ExtendedStartAvatarRequest } from "./logic/ExtendedTypes";
+import { useTextChat } from "./logic/useTextChat";
+import { AudioRecorder } from "./logic/audio-handler";
+import AutoSTT from "./AutoSTT";
+import { useAutoSTT } from "./logic/useAutoSTT";
+import { useStreamingAvatarContext } from "./logic/context";
 
 import { AVATARS } from "@/app/lib/constants";
 
@@ -41,86 +49,224 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   knowledgeBase: knowledgeBase,
   knowledgeId: "1629692875c84134abd4e37325cf7535",
   voiceChatTransport: VoiceChatTransport.WEBSOCKET,
+  sttSettings: {
+    provider: STTProvider.DEEPGRAM,
+  },
   version: "v2",
+  useSilencePrompt: false,
 };
 
+function normalizeText(text: string) {
+  return text
+    .replace(/[\s\n\r]+/g, " ")
+    .replace(/[.,!?،؛:؛؟]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function InteractiveAvatar() {
-  const { initAvatar, startAvatar, stopAvatar, sessionState, stream } = useStreamingAvatarSession();
+  const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
+    useStreamingAvatarSession();
   const { startVoiceChat } = useVoiceChat();
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
-
+  const audioRecorderRef = useRef<AudioRecorder | null>(null);
+  const [config, setConfig] =
+    useState<ExtendedStartAvatarRequest>(DEFAULT_CONFIG);
   const mediaStream = useRef<HTMLVideoElement>(null);
-  const avatarRef = useRef<any>(null);
-  const gladiaSocketRef = useRef<WebSocket | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const applyFilter = (text: string): string => {
-    if (text.includes("موسیقی")) return "";
-    return text;
-  };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [status, setStatus] = useState("");
+  const { isAvatarTalking, lastAvatarMessage } = useStreamingAvatarContext();
+  const [avatar, setAvatar] = useState<StreamingAvatar | null>(null);
+  const { repeatMessageSync, sendMessageSync } = useTextChat();
+  const [startTranscribe, setStartTranscribe] = useState(true);
 
-  const initGladiaSocket = () => {
-    gladiaSocketRef.current = new WebSocket("wss://api.gladia.io/audio");
-    gladiaSocketRef.current.onopen = () => {
-      gladiaSocketRef.current?.send(
-        JSON.stringify({
-          x_gladia_key: process.env.NEXT_PUBLIC_GLADIA_API_KEY,
-          language: "fa",
-        })
-      );
-    };
+  const handleTranscript = async (text: string) => {
+    // مقایسه بهینه: اگر متن کاربر به طور کامل در آخرین پیام آواتار وجود داشت، نادیده بگیر
+    const userText = normalizeText(text);
 
-    gladiaSocketRef.current.onmessage = (event) => {
-      const result = JSON.parse(event.data);
-      if (!result.transcription) return;
+    const avatarText = normalizeText(
+      typeof lastAvatarMessage === "string" ? lastAvatarMessage : "",
+    );
 
-      const filteredText = applyFilter(result.transcription);
-      if (!filteredText) return;
+    if (
+      userText.length > 0 &&
+      avatarText.length > 0 &&
+      avatarText.includes(userText)
+    ) {
+      // console.log(
+      //   "Ignored duplicate avatar message (substring match in handleTranscript)",
+      // );
 
-      // مستقیماً جمله را به آواتار بده
-      avatarRef.current?.speak({ text: filteredText, task_type: "REPEAT" });
-    };
-  };
-
-  const startMicrophoneStream = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = new AudioContext();
-    const source = audioCtx.createMediaStreamSource(stream);
-    const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-
-    source.connect(processor);
-    processor.connect(audioCtx.destination);
-
-    processor.onaudioprocess = (e) => {
-      const float32 = e.inputBuffer.getChannelData(0);
-      const int16 = new Int16Array(float32.length);
-      for (let i = 0; i < float32.length; i++) {
-        int16[i] = float32[i] * 32767;
+      return;
+    }
+    // debugger;
+    if (avatar && startTranscribe) {
+      try {
+        sendMessageSync(text);
+      } catch (error) {
+        console.error("Error processing transcribed text:", error);
       }
-      gladiaSocketRef.current?.send(int16.buffer);
-    };
+    }
   };
 
-  const fetchAccessToken = async () => {
-    const res = await fetch("/api/get-access-token", { method: "POST" });
-    const token = await res.text();
-    return token;
+  const shouldEnableSTT = !!avatar;
+  // console.log(`shouldEnableSTT ${shouldEnableSTT}`);
+
+  // const recognitionRef = useAutoSTT(
+  //   shouldEnableSTT,
+  //   handleTranscript,
+  //   isAvatarTalking,
+  // );
+
+  async function fetchAccessToken() {
+    try {
+      const response = await fetch("/api/get-access-token", {
+        method: "POST",
+      });
+      const token = await response.text();
+
+      console.log("Access Token:", token); // Log the token to verify
+
+      return token;
+    } catch (error) {
+      console.error("Error fetching access token:", error);
+      throw error;
+    }
+  }
+  const initializeAudioRecorder = () => {
+    audioRecorderRef.current = new AudioRecorder(
+      (status: SetStateAction<string>) => setStatus(status),
+      async (text: any) => {
+        if (avatar) {
+          try {
+            const response = await askQuestion(text);
+
+            if (response.answer || response.text) {
+              repeatMessageSync(response.answer || response.text);
+            }
+          } catch (error) {
+            console.error("Error processing transcribed text:", error);
+          }
+        }
+      },
+    );
   };
 
-  const startSession = useMemoizedFn(async () => {
-    const token = await fetchAccessToken();
-    const avatar = initAvatar(token);
+  const toggleRecording = async () => {
+    if (!audioRecorderRef.current) {
+      initializeAudioRecorder();
+    }
 
-    avatarRef.current = avatar;
+    if (!isRecording) {
+      await audioRecorderRef.current?.startRecording();
+      setIsRecording(true);
+    } else {
+      audioRecorderRef.current?.stopRecording();
+      setIsRecording(false);
+    }
+  };
 
-    avatar.on(StreamingEvents.AVATAR_START_TALKING, console.log);
-    avatar.on(StreamingEvents.AVATAR_STOP_TALKING, console.log);
-    avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => console.log("Disconnected"));
+  const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
+    try {
+      const newToken = await fetchAccessToken();
+      const avatar = initAvatar(newToken);
 
-    await startAvatar(config);
-    await startVoiceChat(true);
+      setAvatar(avatar);
 
-    initGladiaSocket();
-    startMicrophoneStream();
+      avatar.on(StreamingEvents.AVATAR_START_TALKING, () => {
+        setStartTranscribe(false);
+        if (recognitionRef.current) {
+          try {
+            // debugger;
+
+            recognitionRef.current.stop();
+            console.log(`.AVATAR_START_TALKING recognitionRef stop`);
+          } catch {
+            console.log("error in recognitionRef.current.stop");
+          }
+        }
+      });
+      avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
+        // debugger;
+        setStartTranscribe(true);
+        console.log("stop talking");
+        if (recognitionRef.current) {
+          try {
+            // debugger;
+
+            recognitionRef.current.start();
+            console.log(`AVATAR_STOP_TALKING recognitionRef stop`);
+          } catch {
+            console.log("error in recognitionRef.current.stop");
+          }
+        }
+      });
+      avatar.on(StreamingEvents.AVATAR_END_MESSAGE, (event) => {
+        // console.log(`LastAvatarMessage ${event.detail?.message}`);
+
+        // setTimeout(() => {
+        //   if (recognitionRef.current) {
+        //     try {
+        //       console.log(
+        //         ` message in AVATAR_END_MESSAGE is :${event.detail?.message}`,
+        //       );
+        //       recognitionRef.current.start();
+        //     } catch {
+        //       console.log("error in recognitionRef.current.start");
+        //     }
+        //   }
+        // }, 5000); // تاخیر ۱.۲ ثانیه
+      });
+      avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
+        // console.log("Stream disconnected");
+      });
+      avatar.on(StreamingEvents.STREAM_READY, (event) => {
+        // console.log(">>>>> Stream ready:", event.detail);
+      });
+      avatar.on(StreamingEvents.USER_START, (event) => {
+        // console.log(">>>>> User started talking:", event);
+      });
+      avatar.on(StreamingEvents.USER_STOP, (event) => {
+        // console.log(">>>>> User stopped talking:", event);
+      });
+      avatar.on(StreamingEvents.USER_END_MESSAGE, (event) => {
+        // console.log(">>>>> User end message:", event);
+      });
+      avatar.on(StreamingEvents.USER_TALKING_MESSAGE, (event) => {
+        // console.log(">>>>> User talking message:", event);
+      });
+      avatar.on(StreamingEvents.AVATAR_TALKING_MESSAGE, (event) => {
+        console.log(">>>>> Avatar talking message:", event);
+        setStartTranscribe(false);
+        if (recognitionRef.current) {
+          try {
+            // debugger;
+
+            recognitionRef.current.stop();
+            console.log(`.AVATAR_TALKING_MESSAGE recognitionRef stop`);
+          } catch {
+            console.log("error in recognitionRef.current.stop");
+          }
+        }
+      });
+      // avatar.on(StreamingEvents.AVATAR_END_MESSAGE, (event) => {
+      //   console.log(">>>>> Avatar talking message:", event);
+      // });
+
+      await startAvatar(config);
+
+      if (isVoiceChat) {
+        await startVoiceChat();
+      }
+      // await toggleRecording();
+    } catch (error) {
+      console.error("Error starting avatar session:", error);
+    }
+  });
+
+  useUnmount(() => {
+    stopAvatar();
   });
 
   useEffect(() => {
@@ -130,19 +276,16 @@ function InteractiveAvatar() {
         mediaStream.current!.play();
       };
     }
-  }, [stream]);
-
-  useUnmount(() => {
-    gladiaSocketRef.current?.close();
-    stopAvatar();
-  });
+  }, [mediaStream, stream]);
 
   return (
     <div className="w-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
           {sessionState !== StreamingAvatarSessionState.INACTIVE ? (
-            <AvatarVideo ref={mediaStream} />
+            <>
+              <AvatarVideo ref={mediaStream} />
+            </>
           ) : (
             <AvatarConfig config={config} onConfigChange={setConfig} />
           )}
@@ -151,13 +294,29 @@ function InteractiveAvatar() {
           {sessionState === StreamingAvatarSessionState.CONNECTED ? (
             <AvatarControls />
           ) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
-            <Button onClick={startSession}>شروع گفت‌وگو</Button>
+            <div>
+              <div className="flex flex-row gap-4">
+                <Button onClick={startSessionV2}>Start Voice Chat</Button>
+                <Button onClick={startSessionV2}>Start Text Chat</Button>
+              </div>
+
+              <div className="flex flex-row gap-4">
+                <button
+                  onClick={toggleRecording}
+                  className={isRecording ? "secondary" : "primary"}
+                >
+                  {isRecording ? "Stop Recording" : "Start Recording"}
+                </button>
+              </div>
+            </div>
           ) : (
             <LoadingIcon />
           )}
         </div>
       </div>
-      {sessionState === StreamingAvatarSessionState.CONNECTED && <MessageHistory />}
+      {sessionState === StreamingAvatarSessionState.CONNECTED && (
+        <MessageHistory />
+      )}
     </div>
   );
 }
