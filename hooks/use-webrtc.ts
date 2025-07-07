@@ -87,15 +87,20 @@ export default function useWebRTCAudioSession(): UseWebRTCAudioSessionReturn {
       console.log("Parsed message:", msg);
       console.log("Message type:", msg.type);
       console.log("Transcript:", msg.transcript || msg.text);
-      console.log("Is Final:", msg.type === "conversation.item.input_audio_transcription.completed");
+      console.log(
+        "Is Final:",
+        msg.type === "conversation.item.input_audio_transcription.completed",
+      );
       console.log("=====================================");
 
       switch (msg.type) {
         case "conversation.item.input_audio_transcription": {
           // Partial transcription
-          setMsgs(prev => [...prev, {
+          setMsgs((prev) => [
+            ...prev,
+            {
             type: msg.type,
-            transcript: msg.transcript || msg.text || "در حال شنیدن...",
+              transcript: msg.transcript || msg.text || "در حال شنیدن...",
             isFinal: false
           }]);
           break;
