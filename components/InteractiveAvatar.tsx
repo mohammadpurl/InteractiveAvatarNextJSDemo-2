@@ -204,11 +204,11 @@ function InteractiveAvatar() {
 
       avatar.on(StreamingEvents.AVATAR_START_TALKING, (event) => {
         console.log(">>>>>  Avarat Start Talking", event);
-        alert("AVATAR_START_TALKING")
+        // alert("AVATAR_START_TALKING")
       });
       avatar.on(StreamingEvents.AVATAR_STOP_TALKING, (event) => {
         console.log(">>>>>  Avarat Stop Talking", event);
-        alert("AVATAR_STOP_TALKING")
+        // alert("AVATAR_STOP_TALKING")
       });
       avatar.on(StreamingEvents.AVATAR_END_MESSAGE, (event) => {
         console.log(`LastAvatarMessage ${event.detail?.message}`);
