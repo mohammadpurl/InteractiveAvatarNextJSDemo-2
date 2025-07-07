@@ -107,7 +107,7 @@ export const useStreamingAvatarSession = () => {
       avatarRef.current.on(StreamingEvents.USER_STOP, () => {
         setIsUserTalking(false);
       });
-      avatarRef.current.on(StreamingEvents.AVATAR_START_TALKING, () => {
+      avatarRef.current.on(StreamingEvents.AVATAR_START_TALKING, () => { 
         setIsAvatarTalking(true);
       });
       avatarRef.current.on(StreamingEvents.AVATAR_STOP_TALKING, () => {

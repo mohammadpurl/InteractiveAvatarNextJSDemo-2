@@ -1,11 +1,10 @@
 // components/logic/useAutoSTT.ts
 import { useEffect, useRef } from "react";
-import { StreamingEvents } from "@heygen/streaming-avatar";
+import { useVAD } from "../../hooks/useVAD";
 
 import { MessageSender, useStreamingAvatarContext } from "./context";
 
 function normalizeText(text: string) {
-  // حذف فاصله‌های اضافی و کاراکترهای خاص
   return text
     .replace(/[\s\n\r]+/g, " ")
     .replace(/[.,!?،؛:؛؟]/g, "")
@@ -16,13 +15,31 @@ function normalizeText(text: string) {
 export function useAutoSTT(
   enabled: boolean,
   onTranscript: (text: string) => void,
-  isAvatarTalking: boolean,
-//   lastAvatarMessage: string
 ) {
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const isActiveRef = useRef(false);
-  const { handleUserTalkingMessage, messages } =
-    useStreamingAvatarContext();
+  const { isAvatarTalking, messages } = useStreamingAvatarContext();
+
+  // Hook VAD: فقط وقتی صدا تشخیص داده شد این تابع صدا می‌زند
+  const { isSpeaking } = useVAD(
+    () => {
+      if (
+        !enabled ||
+        isAvatarTalking ||
+        isActiveRef.current ||
+        !recognitionRef.current
+      )
+        return;
+
+      try {
+        recognitionRef.current.start();
+        console.log("[STT] started after VAD trigger");
+      } catch (e) {
+        console.warn("STT start error:", e);
+      }
+    },
+    { threshold: 0.015 },
+  );
 
   useEffect(() => {
     if (!enabled) return;
@@ -30,7 +47,11 @@ export function useAutoSTT(
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+
+    if (!SpeechRecognition) {
+      console.warn("SpeechRecognition API not supported");
+      return;
+    }
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
@@ -42,66 +63,49 @@ export function useAutoSTT(
 
     recognition.onstart = () => {
       isActiveRef.current = true;
+      console.log("[STT] onstart");
     };
+
     recognition.onend = () => {
       isActiveRef.current = false;
+      console.log("[STT] onend");
     };
-    recognition.onresult = (event: any) => {
+
+    recognition.onerror = (e: any) => {
+      console.warn("[STT] onerror", e);
+      isActiveRef.current = false;
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let finalTranscript = "";
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         finalTranscript += event.results[i][0].transcript;
       }
-      console.log(`finalTranscript ${finalTranscript}`)
-      // مقایسه بهینه: اگر متن کاربر به طور کامل در آخرین پیام آواتار وجود داشت، نادیده بگیر
+
       const userText = normalizeText(finalTranscript);
       const lastAvatarMessage =
         [...messages].reverse().find((m) => m.sender === MessageSender.AVATAR)
           ?.content || "";
 
-      console.log(`lastAvatarMessage ::/ ${lastAvatarMessage}`);
-
       const avatarText = normalizeText(
         typeof lastAvatarMessage === "string" ? lastAvatarMessage : "",
       );
 
-    //   console.log(`lastAvatarMessage is :${avatarText}`)
       if (
         userText.length > 0 &&
         avatarText.length > 0 &&
         avatarText.includes(userText)
       ) {
-        // console.log(
-        //   "Ignored duplicate avatar message (substring match in hook)",
-        // );
-
+        console.log("[STT] Ignored duplicate message");
         return;
       }
+
       if (userText.length > 0) {
         onTranscript(finalTranscript);
-        // console.log(finalTranscript)
-        handleUserTalkingMessage({
-          detail: {
-            type: StreamingEvents.USER_TALKING_MESSAGE,
-            task_id: Date.now().toString(),
-            message: finalTranscript,
-          },
-        });
+        console.log("[STT] Final transcript:", finalTranscript);
       }
     };
-
-    // اگر آواتار صحبت نمی‌کند، recognition را فعال کن (با delay اختیاری)
-    if (!isAvatarTalking) {
-      setTimeout(() => {
-        if (!isActiveRef.current) {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.warn("Recognition start error (initial):", e);
-          }
-        }
-      }, 5000); // delay اختیاری (مثلاً ۱.۲ ثانیه)
-    }
 
     return () => {
       try {
@@ -109,20 +113,15 @@ export function useAutoSTT(
       } catch {}
       isActiveRef.current = false;
     };
-  }, [enabled, onTranscript, handleUserTalkingMessage, isAvatarTalking]);
+  }, [enabled, onTranscript, messages, isAvatarTalking]);
 
+  // اگر آواتار شروع به صحبت کرد، STT را قطع کن
   useEffect(() => {
-    if (!recognitionRef.current) return;
     if (isAvatarTalking) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {}
-    } else if (enabled) {
-      try {
-        recognitionRef.current.start();
-      } catch (e) {}
+      recognitionRef.current?.stop();
+      console.log("[STT] stopped because avatar is talking");
     }
-  }, [isAvatarTalking, enabled]);
+  }, [isAvatarTalking]);
 
   return recognitionRef;
 }

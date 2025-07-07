@@ -3,7 +3,7 @@ import StreamingAvatar, {
   StreamingTalkingMessageEvent,
   UserTalkingMessageEvent,
 } from "@heygen/streaming-avatar";
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useEffect } from "react";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -25,118 +25,143 @@ export interface Message {
 type StreamingAvatarContextProps = {
   avatarRef: React.MutableRefObject<StreamingAvatar | null>;
   basePath?: string;
-
   isMuted: boolean;
   setIsMuted: (isMuted: boolean) => void;
   isVoiceChatLoading: boolean;
   setIsVoiceChatLoading: (isVoiceChatLoading: boolean) => void;
   isVoiceChatActive: boolean;
   setIsVoiceChatActive: (isVoiceChatActive: boolean) => void;
-
   sessionState: StreamingAvatarSessionState;
   setSessionState: (sessionState: StreamingAvatarSessionState) => void;
   stream: MediaStream | null;
   setStream: (stream: MediaStream | null) => void;
-
   messages: Message[];
   clearMessages: () => void;
-  handleUserTalkingMessage: ({
-    detail,
-  }: {
-    detail: UserTalkingMessageEvent;
-  }) => void;
-  handleStreamingTalkingMessage: ({
-    detail,
-  }: {
-    detail: StreamingTalkingMessageEvent;
-  }) => void;
+  handleUserTalkingMessage: (event: { detail: UserTalkingMessageEvent }) => void;
+  handleStreamingTalkingMessage: (event: { detail: StreamingTalkingMessageEvent }) => void;
   handleEndMessage: () => void;
-
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
   isUserTalking: boolean;
   setIsUserTalking: (isUserTalking: boolean) => void;
   isAvatarTalking: boolean;
   setIsAvatarTalking: (isAvatarTalking: boolean) => void;
-
   connectionQuality: ConnectionQuality;
   setConnectionQuality: (connectionQuality: ConnectionQuality) => void;
-
   lastAvatarMessage: string;
-  setLastAvatarMessage: (lastAvatarMessage: string) => void;
+  handleTranscript: (
+    text: string,
+    options?: {
+      sendMessageSync?: (t: string) => void;
+      avatar?: any;
+      startTranscribe?: boolean;
+    },
+  ) => Promise<void>;
 };
 
-const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
-  {
-    avatarRef: { current: null },
-    isMuted: true,
-    setIsMuted: () => {},
-    isVoiceChatLoading: false,
-    setIsVoiceChatLoading: () => {},
-    sessionState: StreamingAvatarSessionState.INACTIVE,
-    setSessionState: () => {},
-    isVoiceChatActive: false,
-    setIsVoiceChatActive: () => {},
-    stream: null,
-    setStream: () => {},
-    messages: [],
-    clearMessages: () => {},
-    handleUserTalkingMessage: () => {},
-    handleStreamingTalkingMessage: () => {},
-    handleEndMessage: () => {},
-    isListening: false,
-    setIsListening: () => {},
-    isUserTalking: false,
-    setIsUserTalking: () => {},
-    isAvatarTalking: false,
-    setIsAvatarTalking: () => {},
-    connectionQuality: ConnectionQuality.UNKNOWN,
-    setConnectionQuality: () => {},
-    lastAvatarMessage: "",
-    setLastAvatarMessage: () => {},
-  },
-);
+const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>({
+  avatarRef: { current: null },
+  isMuted: true,
+  setIsMuted: () => {},
+  isVoiceChatLoading: false,
+  setIsVoiceChatLoading: () => {},
+  isVoiceChatActive: false,
+  setIsVoiceChatActive: () => {},
+  sessionState: StreamingAvatarSessionState.INACTIVE,
+  setSessionState: () => {},
+  stream: null,
+  setStream: () => {},
+  messages: [],
+  clearMessages: () => {},
+  handleUserTalkingMessage: () => {},
+  handleStreamingTalkingMessage: () => {},
+  handleEndMessage: () => {},
+  isListening: false,
+  setIsListening: () => {},
+  isUserTalking: false,
+  setIsUserTalking: () => {},
+  isAvatarTalking: false,
+  setIsAvatarTalking: () => {},
+  connectionQuality: ConnectionQuality.UNKNOWN,
+  setConnectionQuality: () => {},
+  lastAvatarMessage: "",
+  handleTranscript: async () => {},
+});
 
 const useStreamingAvatarSessionState = () => {
-  const [sessionState, setSessionState] = useState(
-    StreamingAvatarSessionState.INACTIVE,
-  );
+  const [sessionState, setSessionState] = useState(StreamingAvatarSessionState.INACTIVE);
   const [stream, setStream] = useState<MediaStream | null>(null);
-
-  return {
-    sessionState,
-    setSessionState,
-    stream,
-    setStream,
-  };
+  return { sessionState, setSessionState, stream, setStream };
 };
 
 const useStreamingAvatarVoiceChatState = () => {
   const [isMuted, setIsMuted] = useState(true);
   const [isVoiceChatLoading, setIsVoiceChatLoading] = useState(false);
   const [isVoiceChatActive, setIsVoiceChatActive] = useState(false);
-
-  return {
-    isMuted,
-    setIsMuted,
-    isVoiceChatLoading,
-    setIsVoiceChatLoading,
-    isVoiceChatActive,
-    setIsVoiceChatActive,
-  };
+  return { isMuted, setIsMuted, isVoiceChatLoading, setIsVoiceChatLoading, isVoiceChatActive, setIsVoiceChatActive };
 };
 
-const useStreamingAvatarMessageState = (
-  setLastAvatarMessage: (msg: string) => void,
-) => {
+const useStreamingAvatarListeningState = () => {
+  const [isListening, setIsListening] = useState(false);
+  return { isListening, setIsListening };
+};
+
+const useStreamingAvatarTalkingState = () => {
+  const [isUserTalking, setIsUserTalking] = useState(false);
+  const [isAvatarTalking, setIsAvatarTalking] = useState(false);
+  return { isUserTalking, setIsUserTalking, isAvatarTalking, setIsAvatarTalking };
+};
+
+const useStreamingAvatarConnectionQualityState = () => {
+  const [connectionQuality, setConnectionQuality] = useState(ConnectionQuality.UNKNOWN);
+  return { connectionQuality, setConnectionQuality };
+};
+
+// Helpers
+function normalizeText(text: string) {
+  return text.replace(/[\s\n\r]+/g, " ").replace(/[.,!?،؛:؛؟]/g, "").trim().toLowerCase();
+}
+function removeConsecutiveDuplicates(text: string) {
+  const sentences = text.split(/(?<=[.!؟])\s+/);
+  const result: string[] = [];
+  for (let i = 0; i < sentences.length; i++) {
+    if (sentences[i] && sentences[i] !== sentences[i - 1]) {
+      result.push(sentences[i]);
+    }
+  }
+  return result.join(" ").trim();
+}
+function similarity(a: string, b: string) {
+  if (!a.length && !b.length) return 1;
+  if (!a.length || !b.length) return 0;
+  const longer = a.length > b.length ? a : b;
+  const shorter = a.length > b.length ? b : a;
+  const longerLength = longer.length;
+  const editDistance = levenshtein(longer, shorter);
+  return (longerLength - editDistance) / longerLength;
+}
+function levenshtein(a: string, b: string) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const currentSenderRef = useRef<MessageSender | null>(null);
+  const lastAvatarMessageRef = useRef<string>("");
 
-  const handleUserTalkingMessage = ({
-    detail,
-  }: {
-    detail: UserTalkingMessageEvent;
-  }) => {
+  const handleUserTalkingMessage = ({ detail }: { detail: UserTalkingMessageEvent }) => {
     if (currentSenderRef.current === MessageSender.CLIENT) {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -158,8 +183,7 @@ const useStreamingAvatarMessageState = (
     }
   };
 
-  const handleStreamingTalkingMessage = useCallback(({ detail }) => {
-    
+  const handleStreamingTalkingMessage = ({ detail }: { detail: StreamingTalkingMessageEvent }) => {
     if (currentSenderRef.current === MessageSender.AVATAR) {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -168,10 +192,6 @@ const useStreamingAvatarMessageState = (
           content: [prev[prev.length - 1].content, detail.message].join(""),
         },
       ]);
-
-      setLastAvatarMessage(
-        messages.length > 0 ? messages[messages.length - 1].content : "",
-      );
     } else {
       currentSenderRef.current = MessageSender.AVATAR;
       setMessages((prev) => [
@@ -183,14 +203,53 @@ const useStreamingAvatarMessageState = (
         },
       ]);
     }
-  }, []);
+  };
 
   const handleEndMessage = () => {
     currentSenderRef.current = null;
   };
 
+  useEffect(() => {
+    const avatarMessages = messages.filter((m) => m.sender === MessageSender.AVATAR);
+    if (avatarMessages.length > 0) {
+      lastAvatarMessageRef.current = avatarMessages[avatarMessages.length - 1].content;
+    }
+  }, [messages]);
+
+  const handleTranscript = async (
+    text: string,
+    options?: {
+      sendMessageSync?: (t: string) => void;
+      avatar?: any;
+      startTranscribe?: boolean;
+    },
+  ) => {
+    console.log("handleTranscript", text);
+    const userText = normalizeText(removeConsecutiveDuplicates(text));
+    const lastAvatarText = normalizeText(lastAvatarMessageRef.current);
+    const threshold = 0.6;
+    const isContain = lastAvatarText.includes(userText);
+
+    if (userText.length > 0 && (similarity(userText, lastAvatarText) > threshold || isContain)) {
+      return;
+    }
+
+    if (
+      options?.avatar &&
+      !isAvatarTalking && // ✅ حالا به‌درستی در دسترس است
+      options?.sendMessageSync
+    ) {
+      try {
+        options.sendMessageSync(text);
+      } catch (error) {
+        console.error("Error processing transcribed text:", error);
+      }
+    }
+  };
+
   return {
     messages,
+    lastAvatarMessage: lastAvatarMessageRef.current,
     clearMessages: () => {
       setMessages([]);
       currentSenderRef.current = null;
@@ -198,33 +257,8 @@ const useStreamingAvatarMessageState = (
     handleUserTalkingMessage,
     handleStreamingTalkingMessage,
     handleEndMessage,
+    handleTranscript,
   };
-};
-
-const useStreamingAvatarListeningState = () => {
-  const [isListening, setIsListening] = useState(false);
-
-  return { isListening, setIsListening };
-};
-
-const useStreamingAvatarTalkingState = () => {
-  const [isUserTalking, setIsUserTalking] = useState(false);
-  const [isAvatarTalking, setIsAvatarTalking] = useState(false);
-
-  return {
-    isUserTalking,
-    setIsUserTalking,
-    isAvatarTalking,
-    setIsAvatarTalking,
-  };
-};
-
-const useStreamingAvatarConnectionQualityState = () => {
-  const [connectionQuality, setConnectionQuality] = useState(
-    ConnectionQuality.UNKNOWN,
-  );
-
-  return { connectionQuality, setConnectionQuality };
 };
 
 export const StreamingAvatarProvider = ({
@@ -234,13 +268,13 @@ export const StreamingAvatarProvider = ({
   children: React.ReactNode;
   basePath?: string;
 }) => {
-  const avatarRef = React.useRef<StreamingAvatar>(null);
+  const avatarRef = useRef<StreamingAvatar>(null);
+
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
-  const [lastAvatarMessage, setLastAvatarMessage] = useState<string>("");
-  const messageState = useStreamingAvatarMessageState(setLastAvatarMessage);
-  const listeningState = useStreamingAvatarListeningState();
   const talkingState = useStreamingAvatarTalkingState();
+  const messageState = useStreamingAvatarMessageState(talkingState.isAvatarTalking); // ✅ مقداردهی
+  const listeningState = useStreamingAvatarListeningState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
 
   return (
@@ -254,8 +288,7 @@ export const StreamingAvatarProvider = ({
         ...listeningState,
         ...talkingState,
         ...connectionQualityState,
-        lastAvatarMessage,
-        setLastAvatarMessage,
+        handleTranscript: messageState.handleTranscript,
       }}
     >
       {children}

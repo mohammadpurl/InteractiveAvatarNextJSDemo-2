@@ -12,6 +12,7 @@ export const useConversationState = () => {
   }, [avatarRef]);
 
   const stopListening = useCallback(() => {
+   
     if (!avatarRef.current) return;
     avatarRef.current.stopListening();
   }, [avatarRef]);
