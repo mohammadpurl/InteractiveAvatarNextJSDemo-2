@@ -136,7 +136,8 @@ function InteractiveAvatar() {
 
   const [avatar, setAvatar] = useState<StreamingAvatar | null>(null);
   const { repeatMessageSync, sendMessageSync } = useTextChat();
-  const { handleTranscript: contextHandleTranscript } = useStreamingAvatarContext();
+  const { handleTranscript: contextHandleTranscript } =
+    useStreamingAvatarContext();
 
   const recognitionRef = useAutoSTT(
     DEFAULT_CONFIG .enableRecognitionSTT,
@@ -236,9 +237,9 @@ function InteractiveAvatar() {
 
       await startAvatar(config);
 
-      // if (isVoiceChat) {
-      //   await startVoiceChat(true);
-      // }
+      if (isVoiceChat) {
+        await startVoiceChat(true);
+      }
       // await toggleRecording();
     } catch (error) {
       console.error("Error starting avatar session:", error);
@@ -276,18 +277,22 @@ function InteractiveAvatar() {
           ) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
             <div>
               <div className="flex flex-row gap-4">
-                <Button onClick={startSessionV2}>Start Voice Chat</Button>
-                <Button onClick={startSessionV2}>Start Text Chat</Button>
+                <Button onClick={() => startSessionV2(true)}>
+                  Start Voice Chat
+                </Button>
+                <Button onClick={() => startSessionV2(false)}>
+                  Start Text Chat
+                </Button>
               </div>
 
-              <div className="flex flex-row gap-4">
+              {/* <div className="flex flex-row gap-4">
                 <button
                   className={isRecording ? "secondary" : "primary"}
                   onClick={toggleRecording}
                 >
                   {isRecording ? "Stop Recording" : "Start Recording"}
                 </button>
-              </div>
+              </div> */}
             </div>
           ) : (
             <LoadingIcon />

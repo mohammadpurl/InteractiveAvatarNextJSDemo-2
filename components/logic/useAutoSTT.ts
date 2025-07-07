@@ -16,7 +16,7 @@ export function useAutoSTT(
   enabled: boolean,
   onTranscript: (text: string) => void,
 ) {
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const recognitionRef = useRef<any | null>(null);
   const isActiveRef = useRef(false);
   const { isAvatarTalking, messages } = useStreamingAvatarContext();
 
@@ -76,7 +76,7 @@ export function useAutoSTT(
       isActiveRef.current = false;
     };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: any) => {
       let finalTranscript = "";
 
       for (let i = event.resultIndex; i < event.results.length; ++i) {
