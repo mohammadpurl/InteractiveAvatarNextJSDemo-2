@@ -1,9 +1,14 @@
+import { askQuestion } from "@/services/api";
 import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
+  TaskType,
   UserTalkingMessageEvent,
 } from "@heygen/streaming-avatar";
 import React, { useRef, useState, useEffect } from "react";
+
+import { useBookingFlow } from "./useBookingFlow";
+import { useReservationState } from "./useReservationState";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -91,6 +96,7 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
 const useStreamingAvatarSessionState = () => {
   const [sessionState, setSessionState] = useState(StreamingAvatarSessionState.INACTIVE);
   const [stream, setStream] = useState<MediaStream | null>(null);
+
   return { sessionState, setSessionState, stream, setStream };
 };
 
@@ -98,22 +104,26 @@ const useStreamingAvatarVoiceChatState = () => {
   const [isMuted, setIsMuted] = useState(true);
   const [isVoiceChatLoading, setIsVoiceChatLoading] = useState(false);
   const [isVoiceChatActive, setIsVoiceChatActive] = useState(false);
+
   return { isMuted, setIsMuted, isVoiceChatLoading, setIsVoiceChatLoading, isVoiceChatActive, setIsVoiceChatActive };
 };
 
 const useStreamingAvatarListeningState = () => {
   const [isListening, setIsListening] = useState(false);
+
   return { isListening, setIsListening };
 };
 
 const useStreamingAvatarTalkingState = () => {
   const [isUserTalking, setIsUserTalking] = useState(false);
   const [isAvatarTalking, setIsAvatarTalking] = useState(false);
+
   return { isUserTalking, setIsUserTalking, isAvatarTalking, setIsAvatarTalking };
 };
 
 const useStreamingAvatarConnectionQualityState = () => {
   const [connectionQuality, setConnectionQuality] = useState(ConnectionQuality.UNKNOWN);
+
   return { connectionQuality, setConnectionQuality };
 };
 
@@ -124,11 +134,13 @@ function normalizeText(text: string) {
 function removeConsecutiveDuplicates(text: string) {
   const sentences = text.split(/(?<=[.!؟])\s+/);
   const result: string[] = [];
+
   for (let i = 0; i < sentences.length; i++) {
     if (sentences[i] && sentences[i] !== sentences[i - 1]) {
       result.push(sentences[i]);
     }
   }
+
   return result.join(" ").trim();
 }
 function similarity(a: string, b: string) {
@@ -138,10 +150,12 @@ function similarity(a: string, b: string) {
   const shorter = a.length > b.length ? b : a;
   const longerLength = longer.length;
   const editDistance = levenshtein(longer, shorter);
+
   return (longerLength - editDistance) / longerLength;
 }
 function levenshtein(a: string, b: string) {
   const matrix = [];
+
   for (let i = 0; i <= b.length; i++) matrix[i] = [i];
   for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
   for (let i = 1; i <= b.length; i++) {
@@ -153,6 +167,7 @@ function levenshtein(a: string, b: string) {
       }
     }
   }
+
   return matrix[b.length][a.length];
 }
 
@@ -210,11 +225,18 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
   };
 
   useEffect(() => {
-    const avatarMessages = messages.filter((m) => m.sender === MessageSender.AVATAR);
+    const avatarMessages = messages.filter(
+      (m) => m.sender === MessageSender.AVATAR,
+    );
+
     if (avatarMessages.length > 0) {
-      lastAvatarMessageRef.current = avatarMessages[avatarMessages.length - 1].content;
+      lastAvatarMessageRef.current =
+        avatarMessages[avatarMessages.length - 1].content;
     }
   }, [messages]);
+
+  const { bookingStep, handleBookingFlow } = useBookingFlow();
+  const { ticketInfo, updateInfo } = useReservationState();
 
   const handleTranscript = async (
     text: string,
@@ -241,6 +263,25 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
     ) {
       try {
         options.sendMessageSync(text);
+        console.log(`log user speach hear: ${text}`)
+        // debugger;
+        console.log(bookingStep)
+        updateInfo(lastAvatarText, text); 
+        console.log("ticketInfo :::",ticketInfo);
+        // if (avatar) {
+        //   try {
+        //     const response = await askQuestion(text);
+
+        //     if (response.answer || response.text) {
+        //       await avatar.speak({
+        //         text: response.answer || response.text,
+        //         taskType: TaskType.REPEAT,
+        //       });
+        //     }
+        //   } catch (error) {
+        //     console.error('Error processing transcribed text:', error);
+        //   }
+        // }
       } catch (error) {
         console.error("Error processing transcribed text:", error);
       }

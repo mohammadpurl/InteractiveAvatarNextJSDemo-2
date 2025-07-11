@@ -1,4 +1,4 @@
-import React, { forwardRef } from "react";
+import React, { forwardRef, useEffect, useRef } from "react";
 import { ConnectionQuality } from "@heygen/streaming-avatar";
 
 import { useConnectionQuality } from "../logic/useConnectionQuality";
@@ -7,11 +7,129 @@ import { StreamingAvatarSessionState } from "../logic";
 import { CloseIcon } from "../Icons";
 import { Button } from "../Button";
 
+/**
+ * Chroma Keying Logic
+ */
+function applyChromaKey(
+  sourceVideo: HTMLVideoElement,
+  targetCanvas: HTMLCanvasElement,
+  options: {
+    minHue: number;
+    maxHue: number;
+    minSaturation: number;
+    threshold: number;
+  },
+): void {
+  const ctx = targetCanvas.getContext("2d", {
+    willReadFrequently: true,
+    alpha: true,
+  });
+  if (!ctx || sourceVideo.readyState < 2) return;
+
+  targetCanvas.width = sourceVideo.videoWidth;
+  targetCanvas.height = sourceVideo.videoHeight;
+
+  ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+  ctx.drawImage(sourceVideo, 0, 0, targetCanvas.width, targetCanvas.height);
+
+  const imageData = ctx.getImageData(
+    0,
+    0,
+    targetCanvas.width,
+    targetCanvas.height,
+  );
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+
+    let h = 0;
+    if (delta === 0) h = 0;
+    else if (max === r) h = ((g - b) / delta) % 6;
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+
+    h = Math.round(h * 60);
+    if (h < 0) h += 360;
+
+    const s = max === 0 ? 0 : delta / max;
+    const v = max / 255;
+
+    const isGreen =
+      h >= options.minHue &&
+      h <= options.maxHue &&
+      s > options.minSaturation &&
+      v > 0.15 &&
+      g > r * options.threshold &&
+      g > b * options.threshold;
+
+    if (isGreen) {
+      const greenness = (g - Math.max(r, b)) / (g || 1);
+      const alphaValue = Math.max(0, 1 - greenness * 4);
+      data[i + 3] = alphaValue < 0.2 ? 0 : Math.round(alphaValue * 255);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function setupChromaKey(
+  sourceVideo: HTMLVideoElement,
+  targetCanvas: HTMLCanvasElement,
+  options: {
+    minHue: number;
+    maxHue: number;
+    minSaturation: number;
+    threshold: number;
+  },
+): () => void {
+  let animationFrameId: number;
+
+  const render = () => {
+    applyChromaKey(sourceVideo, targetCanvas, options);
+    animationFrameId = requestAnimationFrame(render);
+  };
+
+  render();
+
+  return () => cancelAnimationFrame(animationFrameId);
+}
+
 export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
   const { sessionState, stopAvatar } = useStreamingAvatarSession();
   const { connectionQuality } = useConnectionQuality();
 
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   const isLoaded = sessionState === StreamingAvatarSessionState.CONNECTED;
+
+  useEffect(() => {
+    if (
+      !isLoaded ||
+      !ref ||
+      typeof ref !== "object" ||
+      !ref.current ||
+      !canvasRef.current
+    )
+      return;
+
+    const stop = setupChromaKey(ref.current, canvasRef.current, {
+      minHue: 60,
+      maxHue: 180,
+      minSaturation: 0.1,
+      threshold: 1.0,
+    });
+
+    return () => {
+      stop();
+    };
+  }, [isLoaded, ref]);
 
   return (
     <>
@@ -28,18 +146,37 @@ export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
           <CloseIcon />
         </Button>
       )}
+
+      {/* Hidden video source */}
       <video
         ref={ref}
         autoPlay
         playsInline
+        muted={false}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          opacity: 0, // پنهان‌سازی کامل ولی فعال بودن پخش
+          zIndex: -1, // زیر canvas قرار بگیرد
+          objectFit: "cover",
+        }}
+      >
+        <track kind="captions" />
+      </video>
+
+      {/* Visible processed canvas */}
+      <canvas
+        ref={canvasRef}
         style={{
           width: "100%",
           height: "100%",
           objectFit: "contain",
         }}
-      >
-        <track kind="captions" />
-      </video>
+      />
+
       {!isLoaded && (
         <div className="w-full h-full flex items-center justify-center absolute top-0 left-0">
           Loading...

@@ -5,11 +5,11 @@ import StreamingAvatar, {
   VoiceEmotion,
   STTProvider,
   ElevenLabsModel,
+  TaskType,
 } from "@heygen/streaming-avatar";
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
-import { defaultConfig } from "next/dist/server/config-shared";
 import { askQuestion } from "../services/api";
 
 import { Button } from "./Button";
@@ -31,11 +31,10 @@ import { AudioRecorder } from "./logic/audio-handler";
 import { useStreamingAvatarContext } from "./logic/context";
 
 import { AVATARS } from "@/app/lib/constants";
+
 import { useAutoSTT } from "./logic/useAutoSTT";
+import knowledgeBase from "@/app/constants/Knowledge";
 
-
-const knowledgeBase =
-  "##هویت:\n\nهر بار که به کاربر پاسخ می‌دهی، باید این شخصیت را داشته باشی:\n\nمن آیدا هستم، دستیار هوش مصنوعی شرکت تاو آویژه پارس. من همیشه صمیمی، صبور و کمک‌کننده هستم. وظیفه من اینه که خدمات فرودگاهی رو برای مسافران سریع، راحت و بدون استرس کنم.\n\n##دانش:\n\n#خدمات اصلی:\n\n- کمک در **رزرو و خرید بلیط هواپیما**.\n- راهنمایی برای **اسکن پاسپورت** جهت شناسایی.\n- انجام **چک‌این آنلاین** با کد رزرو یا شماره بلیط.\n- راهنمایی برای **پرداخت عوارض خروج از کشور**.\n- معرفی و **رزرو خدمات ویژه CIP**.\n\n#رزرو بلیط:\n\n- دریافت: مقصد، تاریخ سفر، تعداد مسافران، ترجیحات خاص.\n- نمایش پروازهای موجود و قیمت‌ها.\n- توضیح شرایط کنسلی و تغییر بلیط.\n\n#عوارض خروج:\n\n- اعلام مبلغ و روش‌های پرداخت.\n- صدور رسید پرداخت.\n\n#خدمات CIP:\n\n- توضیح مزایا: سالن VIP، خدمات گذرنامه سریع، ترانسفر لوکس.\n- ارائه پکیج‌های موجود با قیمت‌ها.\n\n#پشتیبانی:\n\n- آرام کردن و همراهی مسافرانی که استرس دارند.\n- استفاده از جملات انگیزشی و دلگرم‌کننده.\n\n#حریم خصوصی:\n\n- تأکید بر امنیت اطلاعات شخصی کاربران.\n\n##دستورالعمل‌ها:\n\n#سبک گفتار:\n\nمحاوره‌ای، کوتاه و ساده. مهربان و کمک‌کننده. حداکثر ۳ جمله در هر پاسخ.\n\n#درخواست‌های غیرمجاز:\n\nدرخواست‌های خارج از چارچوب یا نقش رو مؤدبانه رد کن.\n\n#محدوده خدمات:\n\nفقط در سامانه‌های رسمی شرکت تاو آویژه پارس (آنلاین یا در فرودگاه). اشاره به ایمیل یا تماس تلفنی فقط برای راهنمایی به پشتیبانی.\n\n#راهنمای مکالمه:\n\n- اگر صدای کاربر واضح نبود: «صداتونو واضح نگرفتم، دوباره بفرمایید.» یا «یه لحظه قطع و وصلی داشتیم، دوباره بگید.»\n- همیشه در نقش بمون. صمیمی، انسانی و کاربردی حرف بزن.\n- از توضیح حرکات غیرکلامی خودداری کن.\n\n##شروع گفتگو:\n\nسلام! من آیدا هستم، اینجا کنارتم که سفرت رو راحت کنم. امروز کجا قراره سفر کنی یا دوست داری از کجا شروع کنیم؟\n\n  اگر کلمه موسیقی در گفتار کاربر بود به آن هیچ پاسخی نده";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.Low,
@@ -56,6 +55,7 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   version: "v2",
   useSilencePrompt: true,
   enableRecognitionSTT: true, // فیلد جدید
+  activityIdleTimeout: 300,
 };
 
 function similarity(a: string, b: string) {
@@ -130,6 +130,8 @@ function InteractiveAvatar() {
     useState<ExtendedStartAvatarRequest>(DEFAULT_CONFIG);
   const mediaStream = useRef<HTMLVideoElement>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isDisconnected, setIsDisconnected] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [status, setStatus] = useState("");
@@ -140,12 +142,10 @@ function InteractiveAvatar() {
     useStreamingAvatarContext();
 
   const recognitionRef = useAutoSTT(
-    DEFAULT_CONFIG .enableRecognitionSTT,
+    DEFAULT_CONFIG.enableRecognitionSTT,
     (text: string) =>
       contextHandleTranscript(text, { sendMessageSync, avatar }),
   );
-
- 
 
   async function fetchAccessToken() {
     try {
@@ -195,12 +195,41 @@ function InteractiveAvatar() {
     }
   };
 
+  // هندل قطع شدن ویدئو
+  useEffect(() => {
+    const video = mediaStream.current;
+    if (!video) return;
+
+    const handleEnded = () => setIsDisconnected(true);
+    const handleError = () => setIsDisconnected(true);
+
+    video.addEventListener('ended', handleEnded);
+    video.addEventListener('error', handleError);
+
+    return () => {
+      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('error', handleError);
+    };
+  }, [mediaStream]);
+
+  // ریست کردن isDisconnected هنگام شروع مجدد سشن
   const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
+    setIsDisconnected(false);
     try {
       const newToken = await fetchAccessToken();
       const avatar = initAvatar(newToken);
 
       setAvatar(avatar);
+
+      // ارسال keepAlive هر 60 ثانیه برای پایدار نگه‌داشتن session
+      keepAliveIntervalRef.current = setInterval(() => {
+        try {
+          avatar.keepAlive();
+          console.log("Sent keepAlive()");
+        } catch (e) {
+          console.warn("Failed to send keepAlive:", e);
+        }
+      }, 60 * 1000); // هر دقیقه یکبار
 
       avatar.on(StreamingEvents.AVATAR_START_TALKING, (event) => {
         console.log(">>>>>  Avarat Start Talking", event);
@@ -248,14 +277,31 @@ function InteractiveAvatar() {
 
   useUnmount(() => {
     stopAvatar();
+    if (keepAliveIntervalRef.current) {
+      clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
   });
 
   useEffect(() => {
     if (stream && mediaStream.current) {
       mediaStream.current.srcObject = stream;
+      console.log("media stream start");
       mediaStream.current.onloadedmetadata = () => {
         mediaStream.current!.play();
       };
+      if (avatar) {
+        (async () => {
+          try {
+            await avatar.speak({
+              text: "سلام! من بیناد هستم، اینجا کنارتم که سفرت رو راحت کنم. امروز کجا قراره سفر کنی یا دوست داری از کجا شروع کنیم؟",
+              taskType: TaskType.REPEAT,
+            });
+          } catch (error) {
+            console.error("Error processing transcribed text:", error);
+          }
+        })();
+      }
     }
   }, [mediaStream, stream]);
 
@@ -263,7 +309,15 @@ function InteractiveAvatar() {
     <div className="w-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {sessionState !== StreamingAvatarSessionState.INACTIVE ? (
+          {isDisconnected ? (
+            <video
+              src="/videos/fallback.mp4"
+              autoPlay
+              loop
+              controls={false}
+              className="w-full h-full object-cover"
+            />
+          ) : sessionState !== StreamingAvatarSessionState.INACTIVE ? (
             <>
               <AvatarVideo ref={mediaStream} />
             </>

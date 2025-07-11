@@ -33,9 +33,16 @@ export function useAutoSTT(
 
       try {
         recognitionRef.current.start();
-        console.log("[STT] started after VAD trigger");
-      } catch (e) {
-        console.warn("STT start error:", e);
+        // console.log("[STT] started after VAD trigger");
+      } catch (e: any) {
+        if (
+          e.name === "InvalidStateError" ||
+          e.message?.includes("recognition has already started")
+        ) {
+          // Ignore, already started
+        } else {
+          console.warn("STT start error:", e);
+        }
       }
     },
     { threshold: 0.015 },
@@ -49,7 +56,7 @@ export function useAutoSTT(
       (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      console.warn("SpeechRecognition API not supported");
+      // console.warn("SpeechRecognition API not supported");
       return;
     }
 
@@ -63,16 +70,16 @@ export function useAutoSTT(
 
     recognition.onstart = () => {
       isActiveRef.current = true;
-      console.log("[STT] onstart");
+      // console.log("[STT] onstart");
     };
 
     recognition.onend = () => {
       isActiveRef.current = false;
-      console.log("[STT] onend");
+      // console.log("[STT] onend");
     };
 
     recognition.onerror = (e: any) => {
-      console.warn("[STT] onerror", e);
+      // console.warn("[STT] onerror", e);
       isActiveRef.current = false;
     };
 
@@ -97,13 +104,13 @@ export function useAutoSTT(
         avatarText.length > 0 &&
         avatarText.includes(userText)
       ) {
-        console.log("[STT] Ignored duplicate message");
+        // console.log("[STT] Ignored duplicate message");
         return;
       }
 
       if (userText.length > 0) {
         onTranscript(finalTranscript);
-        console.log("[STT] Final transcript:", finalTranscript);
+        // console.log("[STT] Final transcript:", finalTranscript);
       }
     };
 
@@ -119,7 +126,7 @@ export function useAutoSTT(
   useEffect(() => {
     if (isAvatarTalking) {
       recognitionRef.current?.stop();
-      console.log("[STT] stopped because avatar is talking");
+      // console.log("[STT] stopped because avatar is talking");
     }
   }, [isAvatarTalking]);
 

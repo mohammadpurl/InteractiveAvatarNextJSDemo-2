@@ -1,4 +1,8 @@
-export const AVATARS = [
+export const AVATARS = [  
+  {
+    avatar_id: "Graham_ProfessionalLook_public",
+    name: "Graham ProfessionalLook",
+  },
   {
     avatar_id: "Bryan_FitnessCoach_public",
     name: "Bryan Fitness Coach",
