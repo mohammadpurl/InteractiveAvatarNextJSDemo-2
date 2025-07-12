@@ -53,9 +53,11 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
     provider: STTProvider.GLADIA,
   },
   version: "v2",
-  useSilencePrompt: true,
+  useSilencePrompt: false,
   enableRecognitionSTT: true, // فیلد جدید
-  activityIdleTimeout: 300,
+  activityIdleTimeout: 900,
+  disableIdleTimeout: true,
+
 };
 
 function similarity(a: string, b: string) {
@@ -222,14 +224,14 @@ function InteractiveAvatar() {
       setAvatar(avatar);
 
       // ارسال keepAlive هر 60 ثانیه برای پایدار نگه‌داشتن session
-      keepAliveIntervalRef.current = setInterval(() => {
-        try {
-          avatar.keepAlive();
-          console.log("Sent keepAlive()");
-        } catch (e) {
-          console.warn("Failed to send keepAlive:", e);
-        }
-      }, 60 * 1000); // هر دقیقه یکبار
+      // keepAliveIntervalRef.current = setInterval(() => {
+      //   try {
+      //     avatar.keepAlive();
+      //     console.log("Sent keepAlive()");
+      //   } catch (e) {
+      //     console.warn("Failed to send keepAlive:", e);
+      //   }
+      // }, 600 * 1000); // هر دقیقه یکبار
 
       avatar.on(StreamingEvents.AVATAR_START_TALKING, (event) => {
         console.log(">>>>>  Avarat Start Talking", event);
@@ -244,6 +246,10 @@ function InteractiveAvatar() {
       });
       avatar.on(StreamingEvents.STREAM_DISCONNECTED, () => {
         console.log("Stream disconnected");
+        if (keepAliveIntervalRef.current) {
+          clearInterval(keepAliveIntervalRef.current);
+          keepAliveIntervalRef.current = null;
+        }
       });
       avatar.on(StreamingEvents.STREAM_READY, (event) => {
         console.log(">>>>> Stream ready:", event.detail);

@@ -15,6 +15,21 @@ export interface TicketInfo {
   passengers: Passenger[];
 }
 
+export function isValidIranianNationalId(input: string): boolean {
+  const cleaned = input.replace(/[^\d]/g, ""); // Remove non-digit chars
+  if (!/^\d{10}$/.test(cleaned)) return false;
+  const check = parseInt(cleaned[9], 10);
+  const sum = cleaned
+    .split("")
+    .slice(0, 9)
+    .reduce((acc, digit, i) => acc + parseInt(digit, 10) * (10 - i), 0);
+  const remainder = sum % 11;
+  return (
+    (remainder < 2 && check === remainder) ||
+    (remainder >= 2 && check === 11 - remainder)
+  );
+}
+
 export function useReservationState() {
   const [ticketInfo, setTicketInfo] = useState<TicketInfo>({ passengers: [] });
 
@@ -40,7 +55,14 @@ export function useReservationState() {
       }
     } else if (/کد\s+ملی/.test(normalizedQ)) {
       const last = newInfo.passengers[newInfo.passengers.length - 1];
-      if (last) last.nationalId = normalizedA.match(/\d{10}/)?.[0] || "";
+      if (last) {
+        const rawNid = normalizedA.replace(/[^\d]/g, "");
+        if (isValidIranianNationalId(rawNid)) {
+          last.nationalId = rawNid;
+        } else {
+          console.warn("کد ملی نامعتبر:", rawNid);
+        }
+      }
     } else if (/تعداد\s+چمدان/.test(normalizedQ)) {
       const last = newInfo.passengers[newInfo.passengers.length - 1];
       if (last) last.luggageCount = parseInt(normalizedA.match(/\d+/)?.[0] || "0");

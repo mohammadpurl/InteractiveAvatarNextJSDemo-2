@@ -9,6 +9,7 @@ import React, { useRef, useState, useEffect } from "react";
 
 import { useBookingFlow } from "./useBookingFlow";
 import { useReservationState } from "./useReservationState";
+import { isValidIranianNationalId } from "./useReservationState"; 
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -237,7 +238,9 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
 
   const { bookingStep, handleBookingFlow } = useBookingFlow();
   const { ticketInfo, updateInfo } = useReservationState();
-
+  const [nationalIdRetry, setNationalIdRetry] = useState(0);
+  const MAX_NID_RETRY = 3;
+  
   const handleTranscript = async (
     text: string,
     options?: {
@@ -267,7 +270,37 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
         // debugger;
         console.log(bookingStep)
         updateInfo(lastAvatarText, text); 
-        console.log("ticketInfo :::",ticketInfo);
+        console.log("ticketInfo :::", ticketInfo);
+
+
+        if (/کد\s*ملی/.test(lastAvatarText)) {
+          const rawNid = text.replace(/[^\d]/g, "");
+
+          if (!isValidIranianNationalId(rawNid)) {
+            if (nationalIdRetry < MAX_NID_RETRY) {
+              setNationalIdRetry(nationalIdRetry + 1);
+              if (options?.sendMessageSync) {
+                options.sendMessageSync(
+                  "کد ملی وارد شده نامعتبر است. لطفاً یک کد ملی ۱۰ رقمی معتبر وارد کنید.",
+                );
+              }
+
+              return; // منتظر ورودی بعدی کاربر بمان
+            } else {
+              setNationalIdRetry(0); // ریست برای دفعات بعد
+              if (options?.sendMessageSync) {
+                options.sendMessageSync(
+                  "کد ملی وارد شده نامعتبر بود. لطفاً در صورت نیاز بعداً اصلاح کنید.",
+                );
+              }
+
+              // می‌توانی اینجا ادامه فلو را اجرا کنی یا فقط پیام خطا بدهی
+              return;
+            }
+          } else {
+            setNationalIdRetry(0); // ریست شمارنده در صورت موفقیت
+          }
+        }
         // if (avatar) {
         //   try {
         //     const response = await askQuestion(text);
