@@ -1,5 +1,7 @@
-import React, { forwardRef, useEffect, useRef } from "react";
+// AvatarVideo.tsx
+import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { ConnectionQuality } from "@heygen/streaming-avatar";
+import QRCode from "react-qr-code";
 
 import { useConnectionQuality } from "../logic/useConnectionQuality";
 import { useStreamingAvatarSession } from "../logic/useStreamingAvatarSession";
@@ -7,9 +9,6 @@ import { StreamingAvatarSessionState } from "../logic";
 import { CloseIcon } from "../Icons";
 import { Button } from "../Button";
 
-/**
- * Chroma Keying Logic
- */
 function applyChromaKey(
   sourceVideo: HTMLVideoElement,
   targetCanvas: HTMLCanvasElement,
@@ -24,20 +23,20 @@ function applyChromaKey(
     willReadFrequently: true,
     alpha: true,
   });
+
   if (!ctx || sourceVideo.readyState < 2) return;
 
-  targetCanvas.width = sourceVideo.videoWidth;
-  targetCanvas.height = sourceVideo.videoHeight;
+  const width = sourceVideo.videoWidth;
+  const height = sourceVideo.videoHeight;
 
-  ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
-  ctx.drawImage(sourceVideo, 0, 0, targetCanvas.width, targetCanvas.height);
+  if (!width || !height) return;
 
-  const imageData = ctx.getImageData(
-    0,
-    0,
-    targetCanvas.width,
-    targetCanvas.height,
-  );
+  targetCanvas.width = width;
+  targetCanvas.height = height;
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(sourceVideo, 0, 0, width, height);
+
+  const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
   for (let i = 0; i < data.length; i += 4) {
@@ -50,6 +49,7 @@ function applyChromaKey(
     const delta = max - min;
 
     let h = 0;
+
     if (delta === 0) h = 0;
     else if (max === r) h = ((g - b) / delta) % 6;
     else if (max === g) h = (b - r) / delta + 2;
@@ -72,6 +72,7 @@ function applyChromaKey(
     if (isGreen) {
       const greenness = (g - Math.max(r, b)) / (g || 1);
       const alphaValue = Math.max(0, 1 - greenness * 4);
+
       data[i + 3] = alphaValue < 0.2 ? 0 : Math.round(alphaValue * 255);
     }
   }
@@ -90,7 +91,6 @@ function setupChromaKey(
   },
 ): () => void {
   let animationFrameId: number;
-
   const render = () => {
     applyChromaKey(sourceVideo, targetCanvas, options);
     animationFrameId = requestAnimationFrame(render);
@@ -101,13 +101,35 @@ function setupChromaKey(
   return () => cancelAnimationFrame(animationFrameId);
 }
 
-export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
+export const AvatarVideo = forwardRef<
+  HTMLVideoElement,
+  { showQrCode?: boolean; qrCodeValue?: string }
+>(({ showQrCode = false, qrCodeValue = "" }, ref) => {
   const { sessionState, stopAvatar } = useStreamingAvatarSession();
   const { connectionQuality } = useConnectionQuality();
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fallbackVideoRef = useRef<HTMLVideoElement>(null);
 
   const isLoaded = sessionState === StreamingAvatarSessionState.CONNECTED;
+  const [videoVisible, setVideoVisible] = useState(true);
+
+  useEffect(() => {
+    if (!ref || typeof ref !== "object" || !ref.current) return;
+
+    const video = ref.current;
+    const checkVisibility = () => {
+      const rect = video.getBoundingClientRect();
+      const isInvisible = rect.width === 0 || rect.height === 0;
+
+      setVideoVisible(!isInvisible);
+    };
+
+    const observer = new ResizeObserver(checkVisibility);
+
+    observer.observe(video);
+
+    return () => observer.disconnect();
+  }, [ref]);
 
   useEffect(() => {
     if (
@@ -147,37 +169,47 @@ export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
         </Button>
       )}
 
-      {/* Hidden video source */}
-      <video
-        ref={ref}
-        autoPlay
-        playsInline
-        muted={false}
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
-          opacity: 0, // پنهان‌سازی کامل ولی فعال بودن پخش
-          zIndex: -1, // زیر canvas قرار بگیرد
-          objectFit: "cover",
-        }}
-      >
-        <track kind="captions" />
-      </video>
-
-      {/* Visible processed canvas */}
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        }}
-      />
-
-      {!isLoaded && (
+      {showQrCode ? (
+        <div className="w-full h-full flex items-center justify-center">
+          <QRCode value={qrCodeValue} size={256} />
+        </div>
+      ) : (
+        <>
+          <video
+            ref={ref}
+            autoPlay
+            playsInline
+            muted={false}
+            onError={() => setVideoVisible(false)}
+            onEnded={() => setVideoVisible(false)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              opacity: 0,
+              zIndex: -1,
+              objectFit: "cover",
+            }}
+          />
+          <canvas
+            ref={canvasRef}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+          {!videoVisible && (
+            <video
+              ref={fallbackVideoRef}
+              src="/videos/fallback.mp4"
+              autoPlay
+              loop
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )}
+        </>
+      )}
+      {!isLoaded && !showQrCode && (
         <div className="w-full h-full flex items-center justify-center absolute top-0 left-0">
           Loading...
         </div>
@@ -185,4 +217,5 @@ export const AvatarVideo = forwardRef<HTMLVideoElement>(({}, ref) => {
     </>
   );
 });
+
 AvatarVideo.displayName = "AvatarVideo";

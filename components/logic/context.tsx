@@ -9,7 +9,7 @@ import React, { useRef, useState, useEffect } from "react";
 
 import { useBookingFlow } from "./useBookingFlow";
 import { useReservationState } from "./useReservationState";
-import { isValidIranianNationalId } from "./useReservationState"; 
+import { isValidIranianNationalId } from "./useReservationState";
 
 export enum StreamingAvatarSessionState {
   INACTIVE = "inactive",
@@ -43,8 +43,12 @@ type StreamingAvatarContextProps = {
   setStream: (stream: MediaStream | null) => void;
   messages: Message[];
   clearMessages: () => void;
-  handleUserTalkingMessage: (event: { detail: UserTalkingMessageEvent }) => void;
-  handleStreamingTalkingMessage: (event: { detail: StreamingTalkingMessageEvent }) => void;
+  handleUserTalkingMessage: (event: {
+    detail: UserTalkingMessageEvent;
+  }) => void;
+  handleStreamingTalkingMessage: (event: {
+    detail: StreamingTalkingMessageEvent;
+  }) => void;
   handleEndMessage: () => void;
   isListening: boolean;
   setIsListening: (isListening: boolean) => void;
@@ -59,43 +63,47 @@ type StreamingAvatarContextProps = {
     text: string,
     options?: {
       sendMessageSync?: (t: string) => void;
-      avatar?: any;
+      avatar?: StreamingAvatar | null;
       startTranscribe?: boolean;
     },
   ) => Promise<void>;
 };
 
-const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>({
-  avatarRef: { current: null },
-  isMuted: true,
-  setIsMuted: () => {},
-  isVoiceChatLoading: false,
-  setIsVoiceChatLoading: () => {},
-  isVoiceChatActive: false,
-  setIsVoiceChatActive: () => {},
-  sessionState: StreamingAvatarSessionState.INACTIVE,
-  setSessionState: () => {},
-  stream: null,
-  setStream: () => {},
-  messages: [],
-  clearMessages: () => {},
-  handleUserTalkingMessage: () => {},
-  handleStreamingTalkingMessage: () => {},
-  handleEndMessage: () => {},
-  isListening: false,
-  setIsListening: () => {},
-  isUserTalking: false,
-  setIsUserTalking: () => {},
-  isAvatarTalking: false,
-  setIsAvatarTalking: () => {},
-  connectionQuality: ConnectionQuality.UNKNOWN,
-  setConnectionQuality: () => {},
-  lastAvatarMessage: "",
-  handleTranscript: async () => {},
-});
+const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
+  {
+    avatarRef: { current: null },
+    isMuted: true,
+    setIsMuted: () => {},
+    isVoiceChatLoading: false,
+    setIsVoiceChatLoading: () => {},
+    isVoiceChatActive: false,
+    setIsVoiceChatActive: () => {},
+    sessionState: StreamingAvatarSessionState.INACTIVE,
+    setSessionState: () => {},
+    stream: null,
+    setStream: () => {},
+    messages: [],
+    clearMessages: () => {},
+    handleUserTalkingMessage: () => {},
+    handleStreamingTalkingMessage: () => {},
+    handleEndMessage: () => {},
+    isListening: false,
+    setIsListening: () => {},
+    isUserTalking: false,
+    setIsUserTalking: () => {},
+    isAvatarTalking: false,
+    setIsAvatarTalking: () => {},
+    connectionQuality: ConnectionQuality.UNKNOWN,
+    setConnectionQuality: () => {},
+    lastAvatarMessage: "",
+    handleTranscript: async () => {},
+  },
+);
 
 const useStreamingAvatarSessionState = () => {
-  const [sessionState, setSessionState] = useState(StreamingAvatarSessionState.INACTIVE);
+  const [sessionState, setSessionState] = useState(
+    StreamingAvatarSessionState.INACTIVE,
+  );
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   return { sessionState, setSessionState, stream, setStream };
@@ -106,7 +114,14 @@ const useStreamingAvatarVoiceChatState = () => {
   const [isVoiceChatLoading, setIsVoiceChatLoading] = useState(false);
   const [isVoiceChatActive, setIsVoiceChatActive] = useState(false);
 
-  return { isMuted, setIsMuted, isVoiceChatLoading, setIsVoiceChatLoading, isVoiceChatActive, setIsVoiceChatActive };
+  return {
+    isMuted,
+    setIsMuted,
+    isVoiceChatLoading,
+    setIsVoiceChatLoading,
+    isVoiceChatActive,
+    setIsVoiceChatActive,
+  };
 };
 
 const useStreamingAvatarListeningState = () => {
@@ -119,18 +134,29 @@ const useStreamingAvatarTalkingState = () => {
   const [isUserTalking, setIsUserTalking] = useState(false);
   const [isAvatarTalking, setIsAvatarTalking] = useState(false);
 
-  return { isUserTalking, setIsUserTalking, isAvatarTalking, setIsAvatarTalking };
+  return {
+    isUserTalking,
+    setIsUserTalking,
+    isAvatarTalking,
+    setIsAvatarTalking,
+  };
 };
 
 const useStreamingAvatarConnectionQualityState = () => {
-  const [connectionQuality, setConnectionQuality] = useState(ConnectionQuality.UNKNOWN);
+  const [connectionQuality, setConnectionQuality] = useState(
+    ConnectionQuality.UNKNOWN,
+  );
 
   return { connectionQuality, setConnectionQuality };
 };
 
 // Helpers
 function normalizeText(text: string) {
-  return text.replace(/[\s\n\r]+/g, " ").replace(/[.,!?،؛:؛؟]/g, "").trim().toLowerCase();
+  return text
+    .replace(/[\s\n\r]+/g, " ")
+    .replace(/[.,!?،؛:؛؟]/g, "")
+    .trim()
+    .toLowerCase();
 }
 function removeConsecutiveDuplicates(text: string) {
   const sentences = text.split(/(?<=[.!؟])\s+/);
@@ -164,7 +190,11 @@ function levenshtein(a: string, b: string) {
       if (b.charAt(i - 1) === a.charAt(j - 1)) {
         matrix[i][j] = matrix[i - 1][j - 1];
       } else {
-        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1,
+        );
       }
     }
   }
@@ -177,7 +207,11 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
   const currentSenderRef = useRef<MessageSender | null>(null);
   const lastAvatarMessageRef = useRef<string>("");
 
-  const handleUserTalkingMessage = ({ detail }: { detail: UserTalkingMessageEvent }) => {
+  const handleUserTalkingMessage = ({
+    detail,
+  }: {
+    detail: UserTalkingMessageEvent;
+  }) => {
     if (currentSenderRef.current === MessageSender.CLIENT) {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -199,7 +233,11 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
     }
   };
 
-  const handleStreamingTalkingMessage = ({ detail }: { detail: StreamingTalkingMessageEvent }) => {
+  const handleStreamingTalkingMessage = ({
+    detail,
+  }: {
+    detail: StreamingTalkingMessageEvent;
+  }) => {
     if (currentSenderRef.current === MessageSender.AVATAR) {
       setMessages((prev) => [
         ...prev.slice(0, -1),
@@ -240,7 +278,7 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
   const { ticketInfo, updateInfo } = useReservationState();
   const [nationalIdRetry, setNationalIdRetry] = useState(0);
   const MAX_NID_RETRY = 3;
-  
+
   const handleTranscript = async (
     text: string,
     options?: {
@@ -255,7 +293,10 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
     const threshold = 0.6;
     const isContain = lastAvatarText.includes(userText);
 
-    if (userText.length > 0 && (similarity(userText, lastAvatarText) > threshold || isContain)) {
+    if (
+      userText.length > 0 &&
+      (similarity(userText, lastAvatarText) > threshold || isContain)
+    ) {
       return;
     }
 
@@ -266,41 +307,42 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
     ) {
       try {
         options.sendMessageSync(text);
-        console.log(`log user speach hear: ${text}`)
+        console.log(`log user speach hear: ${text}`);
         // debugger;
-        console.log(bookingStep)
-        updateInfo(lastAvatarText, text); 
+        console.log(bookingStep);
+        updateInfo(lastAvatarText, text);
         console.log("ticketInfo :::", ticketInfo);
 
+        if (/کد\s*ملی/.test(lastAvatarText)) {
+          const rawNid = text.replace(/[^\d]/g, "");
 
-        // if (/کد\s*ملی/.test(lastAvatarText)) {
-        //   const rawNid = text.replace(/[^\d]/g, "");
+          if (!isValidIranianNationalId(rawNid)) {
+            if (nationalIdRetry < MAX_NID_RETRY) {
+              setNationalIdRetry(nationalIdRetry + 1);
+              if (options.avatar) {
+                await options.avatar.speak({
+                  text: "کد ملی وارد شده نامعتبر است. لطفاً یک کد ملی ۱۰ رقمی معتبر وارد کنید.",
+                  taskType: TaskType.REPEAT,
+                });
+              }
 
-        //   if (!isValidIranianNationalId(rawNid)) {
-        //     if (nationalIdRetry < MAX_NID_RETRY) {
-        //       setNationalIdRetry(nationalIdRetry + 1);
-        //       if (options?.sendMessageSync) {
-        //         options.sendMessageSync(
-        //           "کد ملی وارد شده نامعتبر است. لطفاً یک کد ملی ۱۰ رقمی معتبر وارد کنید.",
-        //         );
-        //       }
+              return; // منتظر ورودی بعدی کاربر بمان
+            } else {
+              setNationalIdRetry(0); // ریست برای دفعات بعد
+              if (options.avatar) {
+                await options.avatar.speak({
+                  text: "کد ملی وارد شده نامعتبر بود. لطفاً در صورت نیاز بعداً اصلاح کنید.",
+                  taskType: TaskType.REPEAT,
+                });
+              }
 
-        //       return; // منتظر ورودی بعدی کاربر بمان
-        //     } else {
-        //       setNationalIdRetry(0); // ریست برای دفعات بعد
-        //       if (options?.sendMessageSync) {
-        //         options.sendMessageSync(
-        //           "کد ملی وارد شده نامعتبر بود. لطفاً در صورت نیاز بعداً اصلاح کنید.",
-        //         );
-        //       }
-
-        //       // می‌توانی اینجا ادامه فلو را اجرا کنی یا فقط پیام خطا بدهی
-        //       return;
-        //     }
-        //   } else {
-        //     setNationalIdRetry(0); // ریست شمارنده در صورت موفقیت
-        //   }
-        // }
+              // می‌توانی اینجا ادامه فلو را اجرا کنی یا فقط پیام خطا بدهی
+              return;
+            }
+          } else {
+            setNationalIdRetry(0); // ریست شمارنده در صورت موفقیت
+          }
+        }
         // if (avatar) {
         //   try {
         //     const response = await askQuestion(text);
@@ -347,7 +389,9 @@ export const StreamingAvatarProvider = ({
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
   const talkingState = useStreamingAvatarTalkingState();
-  const messageState = useStreamingAvatarMessageState(talkingState.isAvatarTalking); // ✅ مقداردهی
+  const messageState = useStreamingAvatarMessageState(
+    talkingState.isAvatarTalking,
+  ); // ✅ مقداردهی
   const listeningState = useStreamingAvatarListeningState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
 

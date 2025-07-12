@@ -143,6 +143,8 @@ function InteractiveAvatar() {
   const { handleTranscript: contextHandleTranscript } =
     useStreamingAvatarContext();
 
+  const [isQrCodeMode, setIsQrCodeMode] = useState<boolean>(false)
+
   const recognitionRef = useAutoSTT(
     DEFAULT_CONFIG.enableRecognitionSTT,
     (text: string) =>
@@ -325,7 +327,7 @@ function InteractiveAvatar() {
             />
           ) : sessionState !== StreamingAvatarSessionState.INACTIVE ? (
             <>
-              <AvatarVideo ref={mediaStream} />
+              <AvatarVideo ref={mediaStream} showQrCode={isQrCodeMode} />
             </>
           ) : (
             <AvatarConfig config={config} onConfigChange={setConfig} />
