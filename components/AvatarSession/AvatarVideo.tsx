@@ -75,6 +75,12 @@ function applyChromaKey(
 
       data[i + 3] = alphaValue < 0.2 ? 0 : Math.round(alphaValue * 255);
     }
+    // if (isGreen) {
+    //   data[i] = 255;     // R
+    //   data[i + 1] = 255; // G
+    //   data[i + 2] = 255; // B
+    //   data[i + 3] = 255; // A
+    // }
   }
 
   ctx.putImageData(imageData, 0, 0);

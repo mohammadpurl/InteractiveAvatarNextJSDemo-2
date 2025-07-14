@@ -1,5 +1,5 @@
-// hooks/useReservationState.ts
 import { useState } from "react";
+import { useStreamingAvatarContext } from "./context";
 
 export interface Passenger {
   fullName: string;
@@ -17,6 +17,7 @@ export interface TicketInfo {
 
 export function isValidIranianNationalId(input: string): boolean {
   const cleaned = input.replace(/[^\d]/g, ""); // Remove non-digit chars
+
   if (!/^\d{10}$/.test(cleaned)) return false;
   const check = parseInt(cleaned[9], 10);
   const sum = cleaned
@@ -24,6 +25,7 @@ export function isValidIranianNationalId(input: string): boolean {
     .slice(0, 9)
     .reduce((acc, digit, i) => acc + parseInt(digit, 10) * (10 - i), 0);
   const remainder = sum % 11;
+
   return (
     (remainder < 2 && check === remainder) ||
     (remainder >= 2 && check === 11 - remainder)
@@ -32,6 +34,7 @@ export function isValidIranianNationalId(input: string): boolean {
 
 export function useReservationState() {
   const [ticketInfo, setTicketInfo] = useState<TicketInfo>({ passengers: [] });
+
 
   const updateInfo = (question: string, answer: string) => {
     const newInfo = { ...ticketInfo };
@@ -49,14 +52,21 @@ export function useReservationState() {
       newInfo.flightNumber = normalizedA;
     } else if (/نام.*مسافر/.test(normalizedQ)) {
       if (!newInfo.passengers[newInfo.passengers.length - 1]?.fullName) {
-        newInfo.passengers.push({ fullName: normalizedA, nationalId: "", luggageCount: 0 });
+        newInfo.passengers.push({
+          fullName: normalizedA,
+          nationalId: "",
+          luggageCount: 0,
+        });
       } else {
-        newInfo.passengers[newInfo.passengers.length - 1].fullName = normalizedA;
+        newInfo.passengers[newInfo.passengers.length - 1].fullName =
+          normalizedA;
       }
     } else if (/کد\s+ملی/.test(normalizedQ)) {
       const last = newInfo.passengers[newInfo.passengers.length - 1];
+
       if (last) {
         const rawNid = normalizedA.replace(/[^\d]/g, "");
+
         if (isValidIranianNationalId(rawNid)) {
           last.nationalId = rawNid;
         } else {
@@ -65,8 +75,11 @@ export function useReservationState() {
       }
     } else if (/تعداد\s+چمدان/.test(normalizedQ)) {
       const last = newInfo.passengers[newInfo.passengers.length - 1];
-      if (last) last.luggageCount = parseInt(normalizedA.match(/\d+/)?.[0] || "0");
+
+      if (last)
+        last.luggageCount = parseInt(normalizedA.match(/\d+/)?.[0] || "0");
     }
+
 
     setTicketInfo(newInfo);
   };

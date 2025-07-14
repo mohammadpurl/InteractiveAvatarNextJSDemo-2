@@ -1,4 +1,5 @@
 import { askQuestion } from "@/services/api";
+import { saveConversation } from "@/services/api";
 import StreamingAvatar, {
   ConnectionQuality,
   StreamingTalkingMessageEvent,
@@ -67,6 +68,8 @@ type StreamingAvatarContextProps = {
       startTranscribe?: boolean;
     },
   ) => Promise<void>;
+  isQrCodeMode: boolean;
+  setIsQrCodeMode: (v: boolean) => void;
 };
 
 const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
@@ -97,6 +100,8 @@ const StreamingAvatarContext = React.createContext<StreamingAvatarContextProps>(
     setConnectionQuality: () => {},
     lastAvatarMessage: "",
     handleTranscript: async () => {},
+    isQrCodeMode: false,
+    setIsQrCodeMode: () => {},
   },
 );
 
@@ -202,10 +207,16 @@ function levenshtein(a: string, b: string) {
   return matrix[b.length][a.length];
 }
 
-const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
+const useStreamingAvatarMessageState = ({
+  isAvatarTalking,
+  setIsQrCodeMode,
+}: {
+  isAvatarTalking: boolean;
+  setIsQrCodeMode: (val: boolean) => void;
+}) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const currentSenderRef = useRef<MessageSender | null>(null);
-  const lastAvatarMessageRef = useRef<string>("");
+  const lastAvatarMessageRef = useRef<string>(""); 
 
   const handleUserTalkingMessage = ({
     detail,
@@ -271,6 +282,19 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
     if (avatarMessages.length > 0) {
       lastAvatarMessageRef.current =
         avatarMessages[avatarMessages.length - 1].content;
+
+      const lastMsg = avatarMessages[avatarMessages.length - 1]?.content ?? "";
+
+      if (
+        lastMsg.includes("کیو آر کد") ||
+        lastMsg.includes("کیوآرکد") ||
+        lastMsg.toLowerCase().includes("qr code") ||
+        lastMsg.toLowerCase().includes("qrcode") ||
+        (lastMsg.includes("کد") && lastMsg.includes("پرداخت"))
+      ) {
+        debugger
+        setIsQrCodeMode(true);
+      }
     }
   }, [messages]);
 
@@ -313,36 +337,36 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
         updateInfo(lastAvatarText, text);
         console.log("ticketInfo :::", ticketInfo);
 
-        if (/کد\s*ملی/.test(lastAvatarText)) {
-          const rawNid = text.replace(/[^\d]/g, "");
+        // if (/کد\s*ملی/.test(lastAvatarText)) {
+        //   const rawNid = text.replace(/[^\d]/g, "");
 
-          if (!isValidIranianNationalId(rawNid)) {
-            if (nationalIdRetry < MAX_NID_RETRY) {
-              setNationalIdRetry(nationalIdRetry + 1);
-              if (options.avatar) {
-                await options.avatar.speak({
-                  text: "کد ملی وارد شده نامعتبر است. لطفاً یک کد ملی ۱۰ رقمی معتبر وارد کنید.",
-                  taskType: TaskType.REPEAT,
-                });
-              }
+        //   if (!isValidIranianNationalId(rawNid)) {
+        //     if (nationalIdRetry < MAX_NID_RETRY) {
+        //       setNationalIdRetry(nationalIdRetry + 1);
+        //       if (options.avatar) {
+        //         await options.avatar.speak({
+        //           text: "کد ملی وارد شده نامعتبر است. لطفاً یک کد ملی ۱۰ رقمی معتبر وارد کنید.",
+        //           taskType: TaskType.REPEAT,
+        //         });
+        //       }
 
-              return; // منتظر ورودی بعدی کاربر بمان
-            } else {
-              setNationalIdRetry(0); // ریست برای دفعات بعد
-              if (options.avatar) {
-                await options.avatar.speak({
-                  text: "کد ملی وارد شده نامعتبر بود. لطفاً در صورت نیاز بعداً اصلاح کنید.",
-                  taskType: TaskType.REPEAT,
-                });
-              }
+        //       return; // منتظر ورودی بعدی کاربر بمان
+        //     } else {
+        //       setNationalIdRetry(0); // ریست برای دفعات بعد
+        //       if (options.avatar) {
+        //         await options.avatar.speak({
+        //           text: "کد ملی وارد شده نامعتبر بود. لطفاً در صورت نیاز بعداً اصلاح کنید.",
+        //           taskType: TaskType.REPEAT,
+        //         });
+        //       }
 
-              // می‌توانی اینجا ادامه فلو را اجرا کنی یا فقط پیام خطا بدهی
-              return;
-            }
-          } else {
-            setNationalIdRetry(0); // ریست شمارنده در صورت موفقیت
-          }
-        }
+        //       // می‌توانی اینجا ادامه فلو را اجرا کنی یا فقط پیام خطا بدهی
+        //       return;
+        //     }
+        //   } else {
+        //     setNationalIdRetry(0); // ریست شمارنده در صورت موفقیت
+        //   }
+        // }
         // if (avatar) {
         //   try {
         //     const response = await askQuestion(text);
@@ -366,7 +390,12 @@ const useStreamingAvatarMessageState = (isAvatarTalking: boolean) => {
   return {
     messages,
     lastAvatarMessage: lastAvatarMessageRef.current,
-    clearMessages: () => {
+    clearMessages: async () => {
+      try {
+        await saveConversation(messages);
+      } catch (e) {
+        console.error("Failed to save conversation before clearing:", e);
+      }
       setMessages([]);
       currentSenderRef.current = null;
     },
@@ -385,16 +414,17 @@ export const StreamingAvatarProvider = ({
   basePath?: string;
 }) => {
   const avatarRef = useRef<StreamingAvatar>(null);
-
+  const [isQrCodeMode, setIsQrCodeMode] = useState(false);
   const voiceChatState = useStreamingAvatarVoiceChatState();
   const sessionState = useStreamingAvatarSessionState();
   const talkingState = useStreamingAvatarTalkingState();
-  const messageState = useStreamingAvatarMessageState(
-    talkingState.isAvatarTalking,
-  ); // ✅ مقداردهی
+  const messageState = useStreamingAvatarMessageState({
+    isAvatarTalking: talkingState.isAvatarTalking,
+    setIsQrCodeMode,
+  });
   const listeningState = useStreamingAvatarListeningState();
   const connectionQualityState = useStreamingAvatarConnectionQualityState();
-
+  
   return (
     <StreamingAvatarContext.Provider
       value={{
@@ -407,6 +437,8 @@ export const StreamingAvatarProvider = ({
         ...talkingState,
         ...connectionQualityState,
         handleTranscript: messageState.handleTranscript,
+        isQrCodeMode,
+        setIsQrCodeMode,
       }}
     >
       {children}

@@ -10,7 +10,7 @@ import StreamingAvatar, {
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
-import { askQuestion } from "../services/api";
+import { askQuestion, extractPassengerDataWithOpenAI } from "../services/api";
 
 import { Button } from "./Button";
 import { AvatarConfig } from "./AvatarConfig";
@@ -21,6 +21,7 @@ import { AvatarControls } from "./AvatarSession/AvatarControls";
 import {
   StreamingAvatarProvider,
   StreamingAvatarSessionState,
+  useMessageHistory,
   useVoiceChat,
 } from "./logic";
 import { LoadingIcon } from "./Icons";
@@ -34,7 +35,9 @@ import { AVATARS } from "@/app/lib/constants";
 
 import { useAutoSTT } from "./logic/useAutoSTT";
 import knowledgeBase from "@/app/constants/Knowledge";
-
+import { ConfirmEditableForm } from "./ConfirmEditableForm";
+import TicketInfo from "@/types/ticketInfo";
+import { useReservationState } from "./logic/useReservationState";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.Low,
@@ -57,7 +60,6 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   enableRecognitionSTT: true, // فیلد جدید
   activityIdleTimeout: 900,
   disableIdleTimeout: true,
-
 };
 
 function similarity(a: string, b: string) {
@@ -132,7 +134,9 @@ function InteractiveAvatar() {
     useState<ExtendedStartAvatarRequest>(DEFAULT_CONFIG);
   const mediaStream = useRef<HTMLVideoElement>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const keepAliveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
   const [isDisconnected, setIsDisconnected] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -142,14 +146,30 @@ function InteractiveAvatar() {
   const { repeatMessageSync, sendMessageSync } = useTextChat();
   const { handleTranscript: contextHandleTranscript } =
     useStreamingAvatarContext();
-
-  const [isQrCodeMode, setIsQrCodeMode] = useState<boolean>(false)
+  const { isQrCodeMode, setIsQrCodeMode, isAvatarTalking } =
+    useStreamingAvatarContext();
+  const [showForm, setShowForm] = useState<boolean>(false);
+  const { messages } = useMessageHistory();
+  const [defaultFormData, setDefaultFormData] = useState<TicketInfo>({
+    airportName: "",
+    flightNumber: "",
+    passengers: [
+      {
+        fullName: "",
+        nationalId: "",
+        luggageCount: 0,
+      },
+    ],
+    travelDate: "",
+  });
 
   const recognitionRef = useAutoSTT(
     DEFAULT_CONFIG.enableRecognitionSTT,
     (text: string) =>
       contextHandleTranscript(text, { sendMessageSync, avatar }),
   );
+
+  const { ticketInfo } = useReservationState();
 
   async function fetchAccessToken() {
     try {
@@ -207,12 +227,12 @@ function InteractiveAvatar() {
     const handleEnded = () => setIsDisconnected(true);
     const handleError = () => setIsDisconnected(true);
 
-    video.addEventListener('ended', handleEnded);
-    video.addEventListener('error', handleError);
+    video.addEventListener("ended", handleEnded);
+    video.addEventListener("error", handleError);
 
     return () => {
-      video.removeEventListener('ended', handleEnded);
-      video.removeEventListener('error', handleError);
+      video.removeEventListener("ended", handleEnded);
+      video.removeEventListener("error", handleError);
     };
   }, [mediaStream]);
 
@@ -313,21 +333,67 @@ function InteractiveAvatar() {
     }
   }, [mediaStream, stream]);
 
+  useEffect(() => {
+    if (isQrCodeMode && !isAvatarTalking) {
+      if (isQrCodeMode && !isAvatarTalking) {
+        extractPassengerDataWithOpenAI(messages)
+          .then((data) => {
+            setDefaultFormData(data);
+            setShowForm(true);
+            stopAvatar(); 
+          })
+          .catch(() => {
+            debugger;
+            if (!isAvatarTalking){
+              setShowForm(true);
+              stopAvatar();
+            }
+          });
+      }
+    }
+  }, [isQrCodeMode, isAvatarTalking]);
+
+  useEffect(() => {
+    const defaultFormData = {
+      airportName: ticketInfo.airportName ?? "",
+      flightType: ticketInfo.flightType ?? "خروجی",
+      travelDate: ticketInfo.travelDate ?? "",
+      flightNumber: ticketInfo.flightNumber ?? "",
+      luggageCount: ticketInfo.passengers.reduce(
+        (sum, p) => sum + (p.luggageCount || 0),
+        0,
+      ),
+      passengers: ticketInfo.passengers.map((p) => ({
+        fullName: p.fullName || "",
+        nationalId: p.nationalId || "",
+        luggageCount: p.luggageCount || 0,
+      })),
+    };
+
+    setDefaultFormData(defaultFormData);
+  }, [ticketInfo, isQrCodeMode]);
+
+  const handleConfirm = (formData: any) => {
+    // Do something with the confirmed form data, e.g. send to API or update state
+    console.log("Confirmed form data:", formData);
+    // Optionally, you can close the QR code mode or show a success message
+    setIsQrCodeMode(false);
+  };
+
   return (
     <div className="w-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {isDisconnected ? (
-            <video
-              src="/videos/fallback.mp4"
-              autoPlay
-              loop
-              controls={false}
-              className="w-full h-full object-cover"
-            />
-          ) : sessionState !== StreamingAvatarSessionState.INACTIVE ? (
+          {sessionState !== StreamingAvatarSessionState.INACTIVE ? (
             <>
-              <AvatarVideo ref={mediaStream} showQrCode={isQrCodeMode} />
+              {showForm && defaultFormData ? (
+                <ConfirmEditableForm
+                  ticketInfo={defaultFormData}
+                  onConfirm={handleConfirm}
+                />
+              ) : (
+                <AvatarVideo ref={mediaStream} showQrCode={showForm} />
+              )}
             </>
           ) : (
             <AvatarConfig config={config} onConfigChange={setConfig} />
@@ -342,7 +408,12 @@ function InteractiveAvatar() {
                 <Button onClick={() => startSessionV2(true)}>
                   Start Voice Chat
                 </Button>
-                <Button onClick={() => startSessionV2(false)}>
+                <Button
+                  onClick={() => {
+                    startSessionV2(false);
+                    setShowForm(false);
+                  }}
+                >
                   Start Text Chat
                 </Button>
               </div>
