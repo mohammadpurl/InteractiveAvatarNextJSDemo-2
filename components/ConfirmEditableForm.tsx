@@ -83,27 +83,27 @@ export function ConfirmEditableForm({
         <CardContent className="space-y-4">
           <div>
             <Input {...register("airportName")} placeholder="مقصد" />
-            {errors.airportName && (
+            {errors?.airportName && (
               <p className="text-red-500 text-sm">
-                {errors.airportName.message}
+                {errors?.airportName.message}
               </p>
             )}
           </div>
 
           <div>
             <Input type="date" {...register("travelDate")} />
-            {errors.travelDate && (
+            {errors?.travelDate && (
               <p className="text-red-500 text-sm">
-                {errors.travelDate.message}
+                {errors?.travelDate.message}
               </p>
             )}
           </div>
 
           <div>
             <Input {...register("flightNumber")} placeholder="شماره پرواز" />
-            {errors.flightNumber && (
+            {errors?.flightNumber && (
               <p className="text-red-500 text-sm">
-                {errors.flightNumber.message}
+                {errors?.flightNumber.message}
               </p>
             )}
           </div>
@@ -119,9 +119,9 @@ export function ConfirmEditableForm({
                   {...register(`passengers.${index}.fullName`)}
                   placeholder={`نام مسافر ${index + 1}`}
                 />
-                {errors.passengers?.[index]?.fullName && (
+                {errors?.passengers?.[index]?.fullName && (
                   <p className="text-red-500 text-sm">
-                    {errors.passengers[index]?.fullName?.message}
+                    {errors?.passengers[index]?.fullName?.message}
                   </p>
                 )}
 
@@ -129,9 +129,9 @@ export function ConfirmEditableForm({
                   {...register(`passengers.${index}.nationalId`)}
                   placeholder={`کد ملی مسافر ${index + 1}`}
                 />
-                {errors.passengers?.[index]?.nationalId && (
+                {errors?.passengers?.[index]?.nationalId && (
                   <p className="text-red-500 text-sm">
-                    {errors.passengers[index]?.nationalId?.message}
+                    {errors?.passengers[index]?.nationalId?.message}
                   </p>
                 )}
                 <div>
@@ -140,9 +140,9 @@ export function ConfirmEditableForm({
                     {...register(`passengers.${index}.luggageCount`)}
                     placeholder="تعداد چمدان"
                   />
-                  {errors.passengers?.[index]?.luggageCount && (
+                  {errors?.passengers?.[index]?.luggageCount && (
                     <p className="text-red-500 text-sm">
-                      {errors.passengers?.[index]?.luggageCount.message}
+                      {errors?.passengers?.[index]?.luggageCount?.message}
                     </p>
                   )}
                 </div>
