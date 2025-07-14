@@ -5,12 +5,12 @@ import { Message } from "@/components/logic/context";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
-console.log(`OPENAI_API_KEY:${OPENAI_API_KEY}`)
+
 
 
 // Helper to call OpenAI
 async function callOpenAI(messages: Message[]) {
-    console.log(`callOpenapi messages" ${messages}`)
+    
   const prompt = `Extract all passenger and ticket information from the following conversation for an airline booking. Return a JSON object with these fields:
 {
   "airportName": string,
@@ -48,7 +48,7 @@ ${messages.map((m) => `${m.sender}: ${m.content}`).join("\n")}
   if (!response.ok) {
     const errorText = await response.text();
     console.error("OpenAI error response:", errorText);
-    
+
     throw new Error("OpenAI API error");
   }
   const data = await response.json();

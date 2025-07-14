@@ -216,7 +216,8 @@ const useStreamingAvatarMessageState = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const currentSenderRef = useRef<MessageSender | null>(null);
-  const lastAvatarMessageRef = useRef<string>(""); 
+  const lastAvatarMessageRef = useRef<string>("");
+  const isClearingRef = useRef(false); // جلوگیری از چند بار اجرا
 
   const handleUserTalkingMessage = ({
     detail,
@@ -387,18 +388,29 @@ const useStreamingAvatarMessageState = ({
     }
   };
 
+  // تابع پاک‌سازی پیام‌ها فقط یک بار اجرا شود
+  const clearMessages = async () => {
+    if (isClearingRef.current) return;
+    isClearingRef.current = true;
+    try {
+      await saveConversation(messages);
+    } catch (e) {
+      console.error("Failed to save conversation before clearing:", e);
+    }
+    setMessages([]);
+    currentSenderRef.current = null;
+    // isClearingRef.current را اینجا ریست نمی‌کنیم تا سشن جدید شروع شود
+  };
+
+  // ریست flag هنگام شروع سشن جدید
+  useEffect(() => {
+    isClearingRef.current = false;
+  }, []);
+
   return {
     messages,
     lastAvatarMessage: lastAvatarMessageRef.current,
-    clearMessages: async () => {
-      try {
-        await saveConversation(messages);
-      } catch (e) {
-        console.error("Failed to save conversation before clearing:", e);
-      }
-      setMessages([]);
-      currentSenderRef.current = null;
-    },
+    clearMessages,
     handleUserTalkingMessage,
     handleStreamingTalkingMessage,
     handleEndMessage,

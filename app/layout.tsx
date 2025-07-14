@@ -16,8 +16,8 @@ const fontMono = FontMono({
 
 export const metadata: Metadata = {
   title: {
-    default: "HeyGen Interactive Avatar SDK Demo",
-    template: `%s - HeyGen Interactive Avatar SDK Demo`,
+    default: "دستیار هوش مصنوعی خدمات تشریفات فرودگاهی (CIP)  فرودگاه امام خمینی",
+    template: `%s - دستیار هوش مصنوعی خدمات تشریفات فرودگاهی (CIP)  فرودگاه امام خمینی`,
   },
   icons: {
     icon: "/heygen-logo.png",

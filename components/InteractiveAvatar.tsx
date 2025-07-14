@@ -30,14 +30,13 @@ import { ExtendedStartAvatarRequest } from "./logic/ExtendedTypes";
 import { useTextChat } from "./logic/useTextChat";
 import { AudioRecorder } from "./logic/audio-handler";
 import { useStreamingAvatarContext } from "./logic/context";
+import { useAutoSTT } from "./logic/useAutoSTT";
+import { Passenger, useReservationState } from "./logic/useReservationState";
 
 import { AVATARS } from "@/app/lib/constants";
-
-import { useAutoSTT } from "./logic/useAutoSTT";
 import knowledgeBase from "@/app/constants/Knowledge";
-import { ConfirmEditableForm } from "./ConfirmEditableForm";
 import TicketInfo from "@/types/ticketInfo";
-import { useReservationState } from "./logic/useReservationState";
+import { ConfirmEditableForm } from "./ConfirmEditableForm";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.Low,
@@ -222,6 +221,7 @@ function InteractiveAvatar() {
   // هندل قطع شدن ویدئو
   useEffect(() => {
     const video = mediaStream.current;
+
     if (!video) return;
 
     const handleEnded = () => setIsDisconnected(true);
@@ -333,25 +333,52 @@ function InteractiveAvatar() {
     }
   }, [mediaStream, stream]);
 
+  const [extractedOnce, setExtractedOnce] = useState(false);
+
   useEffect(() => {
-    if (isQrCodeMode && !isAvatarTalking) {
-      if (isQrCodeMode && !isAvatarTalking) {
-        extractPassengerDataWithOpenAI(messages)
-          .then((data) => {
-            setDefaultFormData(data);
+    if (isQrCodeMode && !isAvatarTalking && !extractedOnce) {
+      setExtractedOnce(true);
+      extractPassengerDataWithOpenAI(messages)
+        .then((data) => {
+          setDefaultFormData(data);
+          setShowForm(true);
+          stopAvatar();
+        })
+        .catch(() => {
+          debugger;
+          if (!isAvatarTalking) {
+            let passengersInfo: Passenger[] = [];
+
+            ticketInfo.passengers.map((passenger) => {
+              passengersInfo.push({
+                fullName: passenger?.fullName ? passenger?.fullName : "",
+                nationalId: passenger?.nationalId ? passenger?.nationalId : "",
+                luggageCount: passenger?.luggageCount
+                  ? passenger?.luggageCount
+                  : 0,
+              });
+            });
+            setDefaultFormData({
+              airportName: ticketInfo?.airportName
+                ? ticketInfo?.airportName
+                : "",
+              travelDate: ticketInfo?.travelDate ? ticketInfo?.travelDate : "",
+              flightNumber: ticketInfo?.flightNumber
+                ? ticketInfo?.flightNumber
+                : "",
+              passengers: passengersInfo,
+            });
+
             setShowForm(true);
-            stopAvatar(); 
-          })
-          .catch(() => {
-            debugger;
-            if (!isAvatarTalking){
-              setShowForm(true);
-              stopAvatar();
-            }
-          });
-      }
+            stopAvatar();
+          }
+        });
     }
-  }, [isQrCodeMode, isAvatarTalking]);
+    // ریست flag وقتی فرم بسته شد
+    if (!isQrCodeMode && extractedOnce) {
+      setExtractedOnce(false);
+    }
+  }, [isQrCodeMode, isAvatarTalking, messages]);
 
   useEffect(() => {
     const defaultFormData = {
@@ -384,17 +411,13 @@ function InteractiveAvatar() {
     <div className="w-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {sessionState !== StreamingAvatarSessionState.INACTIVE ? (
-            <>
-              {showForm && defaultFormData ? (
-                <ConfirmEditableForm
-                  ticketInfo={defaultFormData}
-                  onConfirm={handleConfirm}
-                />
-              ) : (
-                <AvatarVideo ref={mediaStream} showQrCode={showForm} />
-              )}
-            </>
+          {showForm && defaultFormData ? (
+            <ConfirmEditableForm
+              ticketInfo={defaultFormData}
+              onConfirm={handleConfirm}
+            />
+          ) : sessionState !== StreamingAvatarSessionState.INACTIVE ? (
+            <AvatarVideo ref={mediaStream} showQrCode={showForm} />
           ) : (
             <AvatarConfig config={config} onConfigChange={setConfig} />
           )}
