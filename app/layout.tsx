@@ -1,7 +1,7 @@
 import "@/styles/globals.css";
 import { Metadata } from "next";
 import { Fira_Code as FontMono, Inter as FontSans } from "next/font/google";
-
+import '@/styles/index.css'
 // import NavBar from "@/components/NavBar";
 
 const fontSans = FontSans({

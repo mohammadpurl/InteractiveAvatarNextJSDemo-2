@@ -10,7 +10,7 @@ import StreamingAvatar, {
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
-import { askQuestion, extractPassengerDataWithOpenAI } from "../services/api";
+import { askQuestion, extractPassengerDataWithOpenAI, saveTrip } from "../services/api";
 
 import { Button } from "./Button";
 import { AvatarConfig } from "./AvatarConfig";
@@ -31,12 +31,14 @@ import { useTextChat } from "./logic/useTextChat";
 import { AudioRecorder } from "./logic/audio-handler";
 import { useStreamingAvatarContext } from "./logic/context";
 import { useAutoSTT } from "./logic/useAutoSTT";
-import { Passenger, useReservationState } from "./logic/useReservationState";
+import { useReservationState } from "./logic/useReservationState";
 
 import { AVATARS } from "@/app/lib/constants";
 import knowledgeBase from "@/app/constants/Knowledge";
 import TicketInfo from "@/types/ticketInfo";
 import { ConfirmEditableForm } from "./ConfirmEditableForm";
+import QRCode from "react-qr-code";
+import { Passenger } from "@/lib/types";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.Low,
@@ -148,6 +150,8 @@ function InteractiveAvatar() {
   const { isQrCodeMode, setIsQrCodeMode, isAvatarTalking } =
     useStreamingAvatarContext();
   const [showForm, setShowForm] = useState<boolean>(false);
+  const [showQRCode, setShowQRCode] = useState(false)
+  const [tripId, setTripId] = useState(0);
   const { messages } = useMessageHistory();
   const [defaultFormData, setDefaultFormData] = useState<TicketInfo>({
     airportName: "",
@@ -339,39 +343,31 @@ function InteractiveAvatar() {
     if (isQrCodeMode && !isAvatarTalking && !extractedOnce) {
       setExtractedOnce(true);
       extractPassengerDataWithOpenAI(messages)
-        .then((data) => {
-          setDefaultFormData(data);
-          setShowForm(true);
+        .then(async (data) => {
+          // تبدیل داده به فرمت مورد نیاز
+          const tripData = {
+            airport_name: data.airportName,
+            travel_date: data.travelDate,
+            flight_number: data.flightNumber,
+            passengers: (data.passengers || []).map((p:Passenger) => ({
+              full_name: p.fullName,
+              national_id: p.nationalId,
+              luggage_count: p.luggageCount,
+            })),
+          };
+
+          // ذخیره در دیتابیس
+          const saved = await saveTrip(tripData);
+          // حالا می‌توانی id را ذخیره کنی و مرحله بعد (نمایش QRCode) را انجام دهی
+          setTripId(saved.id); // فرض: خروجی شامل id است
+          setShowForm(false); // فرم را نباید نمایش دهی
+          setShowQRCode(true); // مرحله بعدی: نمایش QRCode
           stopAvatar();
         })
-        .catch(() => {
-          debugger;
-          if (!isAvatarTalking) {
-            let passengersInfo: Passenger[] = [];
-
-            ticketInfo.passengers.map((passenger) => {
-              passengersInfo.push({
-                fullName: passenger?.fullName ? passenger?.fullName : "",
-                nationalId: passenger?.nationalId ? passenger?.nationalId : "",
-                luggageCount: passenger?.luggageCount
-                  ? passenger?.luggageCount
-                  : 0,
-              });
-            });
-            setDefaultFormData({
-              airportName: ticketInfo?.airportName
-                ? ticketInfo?.airportName
-                : "",
-              travelDate: ticketInfo?.travelDate ? ticketInfo?.travelDate : "",
-              flightNumber: ticketInfo?.flightNumber
-                ? ticketInfo?.flightNumber
-                : "",
-              passengers: passengersInfo,
-            });
-
-            setShowForm(true);
-            stopAvatar();
-          }
+        .catch((err) => {
+          // هندل خطا
+          setShowForm(true);
+          stopAvatar();
         });
     }
     // ریست flag وقتی فرم بسته شد
@@ -411,11 +407,19 @@ function InteractiveAvatar() {
     <div className="w-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {showForm && defaultFormData ? (
-            <ConfirmEditableForm
-              ticketInfo={defaultFormData}
-              onConfirm={handleConfirm}
-            />
+          {
+          // showForm && defaultFormData ? (
+          //   <ConfirmEditableForm
+          //     ticketInfo={defaultFormData}
+          //     onConfirm={handleConfirm}
+          //   />
+          showQRCode && tripId ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <h2>برای مشاهده و ویرایش بلیط، QR را اسکن کنید:</h2>
+              <QRCode value={`${window.location.origin}/ticket/${tripId}`} />
+              <p>یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a></p>
+            </div>
+          
           ) : sessionState !== StreamingAvatarSessionState.INACTIVE ? (
             <AvatarVideo ref={mediaStream} showQrCode={showForm} />
           ) : (

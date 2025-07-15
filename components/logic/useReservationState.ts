@@ -1,19 +1,8 @@
 import { useState } from "react";
 import { useStreamingAvatarContext } from "./context";
+import { TicketInfo } from "@/lib/types";
 
-export interface Passenger {
-  fullName: string;
-  nationalId: string;
-  luggageCount: number;
-}
 
-export interface TicketInfo {
-  airportName?: string;
-  flightType?: "ورودی" | "خروجی";
-  travelDate?: string;
-  flightNumber?: string;
-  passengers: Passenger[];
-}
 
 export function isValidIranianNationalId(input: string): boolean {
   const cleaned = input.replace(/[^\d]/g, ""); // Remove non-digit chars

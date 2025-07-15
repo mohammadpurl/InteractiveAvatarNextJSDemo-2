@@ -61,3 +61,34 @@ export async function extractPassengerDataWithOpenAI(messages: Message[]) {
 
   return await response.json();
 }
+
+export async function saveTrip(tripData: {
+  airport_name: string;
+  travel_date: string;
+  flight_number: string;
+  passengers: Array<{
+    full_name: string;
+    national_id: string;
+    luggage_count: number;
+  }>;
+}) {
+  const res = await fetch( `${process.env.NEXT_PUBLIC_API_URL}/api/v1/trips`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tripData),
+  });
+
+  if (!res.ok) throw new Error("Failed to save trip");
+
+  return await res.json(); // فرض: خروجی شامل id یا tripId است
+}
+
+export async function fetchTrip(tripId: string) {
+
+
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/trips/${tripId}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to fetch trip data");
+  return await res.json();
+}
