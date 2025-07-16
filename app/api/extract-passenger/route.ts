@@ -25,7 +25,7 @@ If any field is missing, use an empty string or 0. Only return the JSON object, 
 Conversation:
 ${messages.map((m) => `${m.sender}: ${m.content}`).join("\n")}
 `;
-
+try{
   const response = await fetch(OPENAI_API_URL, {
     method: "POST",
     headers: {
@@ -65,12 +65,16 @@ ${messages.map((m) => `${m.sender}: ${m.content}`).join("\n")}
     throw new Error("Failed to parse OpenAI response");
   }
 }
+catch(e){
+  console.log(`call openai for extract data error: ${e}`)
+}
+}
 
 export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json();
 
-    console.log(messages)
+    // console.log(messages)
     if (!Array.isArray(messages)) {
       return NextResponse.json(
         { error: "messages must be an array" },
@@ -84,6 +88,7 @@ export async function POST(req: NextRequest) {
     console.log(error)
     const errorMessage =
       error instanceof Error ? error.message : "Internal error";
+    console.log(errorMessage)
 
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

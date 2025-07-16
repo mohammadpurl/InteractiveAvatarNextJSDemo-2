@@ -346,28 +346,30 @@ function InteractiveAvatar() {
         .then(async (data) => {
           // تبدیل داده به فرمت مورد نیاز
           const tripData = {
-            airport_name: data.airportName,
-            travel_date: data.travelDate,
-            flight_number: data.flightNumber,
+            airportName: data.airportName,
+            travelDate: data.travelDate,
+            flightNumber: data.flightNumber,
             passengers: (data.passengers || []).map((p:Passenger) => ({
-              full_name: p.fullName,
-              national_id: p.nationalId,
-              luggage_count: p.luggageCount,
+              fullName: p.fullName,
+              nationalId: p.nationalId,
+              luggageCount: p.luggageCount,
             })),
           };
-
+          debugger;
           // ذخیره در دیتابیس
           const saved = await saveTrip(tripData);
           // حالا می‌توانی id را ذخیره کنی و مرحله بعد (نمایش QRCode) را انجام دهی
           setTripId(saved.id); // فرض: خروجی شامل id است
           setShowForm(false); // فرم را نباید نمایش دهی
           setShowQRCode(true); // مرحله بعدی: نمایش QRCode
+          debugger;
           stopAvatar();
         })
         .catch((err) => {
           // هندل خطا
-          setShowForm(true);
-          stopAvatar();
+          debugger
+          console.log(err)
+          // stopAvatar();
         });
     }
     // ریست flag وقتی فرم بسته شد
@@ -420,7 +422,7 @@ function InteractiveAvatar() {
               <p>یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a></p>
             </div>
           
-          ) : sessionState !== StreamingAvatarSessionState.INACTIVE ? (
+          ) : sessionState !== StreamingAvatarSessionState.INACTIVE && !showQRCode && !tripId  ? (
             <AvatarVideo ref={mediaStream} showQrCode={showForm} />
           ) : (
             <AvatarConfig config={config} onConfigChange={setConfig} />
