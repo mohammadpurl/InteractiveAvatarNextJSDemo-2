@@ -36,8 +36,8 @@ export default function RootLayout({
       lang="en"
     >
       <head />
-      <body className="min-h-screen bg-black text-white">
-        <main className="relative flex flex-col gap-6 h-screen w-screen">
+      <body className="bg-black text-white overflow-hidden">
+        <main className="relative w-screen h-screen overflow-hidden">
           {/* <NavBar /> */}
           {children}
         </main>

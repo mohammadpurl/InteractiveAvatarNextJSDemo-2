@@ -64,7 +64,7 @@ export const TextInput: React.FC = () => {
   }, [message, previousText, startListening, stopListening]);
 
   return (
-    <div className="flex flex-row gap-2 items-end w-full">
+    <div className="flex flex-row gap-2 items-end w-full ">
       <Select
         isSelected={(option) => option === taskType}
         options={Object.values(TaskType)}
@@ -80,7 +80,7 @@ export const TextInput: React.FC = () => {
         onSelect={setTaskMode}
       />
       <Input
-        className="min-w-[500px]"
+        className="min-w-[500px] "
         placeholder={`Type something for the avatar to ${taskType === TaskType.REPEAT ? "repeat" : "respond"}...`}
         value={message}
         onChange={setMessage}

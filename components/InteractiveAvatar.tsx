@@ -145,6 +145,8 @@ function InteractiveAvatar() {
     null,
   );
   const [isDisconnected, setIsDisconnected] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [status, setStatus] = useState("");
@@ -245,6 +247,21 @@ function InteractiveAvatar() {
       video.removeEventListener("error", handleError);
     };
   }, [mediaStream]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setShowDebugPanel((prev) => !prev);
+      }
+    };
+  
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+  
 
   // ریست کردن isDisconnected هنگام شروع مجدد سشن
   const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
@@ -412,45 +429,34 @@ function InteractiveAvatar() {
   };
 
   return (
-    <div className="w-full flex flex-col gap-4">
+    <div className="w-full h-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {
-            // showForm && defaultFormData ? (
-            //   <ConfirmEditableForm
-            //     ticketInfo={defaultFormData}
-            //     onConfirm={handleConfirm}
-            //   />
-            showQRCode && tripId ? (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                }}
-              >
-                <h2>برای مشاهده و ویرایش بلیط، QR را اسکن کنید:</h2>
-                <QRCode value={`${window.location.origin}/ticket/${tripId}`} />
-                <p>
-                  یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a>
-                </p>
-              </div>
-            ) : sessionState !== StreamingAvatarSessionState.INACTIVE &&
-              !showQRCode &&
-              !tripId ? (
-              <AvatarVideo ref={mediaStream} showQrCode={showForm} />
-              // <FullBodyAvatarVideo
-              //   ref={mediaStream}
-              //   showQrCode={showForm}
-              //   lowerBodySrc="/assets/lower-body.png"
-              // />
-            ) : (
-              <AvatarConfig config={config} onConfigChange={setConfig} />
-            )
-          }
+          {showQRCode && tripId ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }}
+            >
+              <h2>برای مشاهده و ویرایش بلیط، QR را اسکن کنید:</h2>
+              <QRCode value={`${window.location.origin}/ticket/${tripId}`} />
+              <p>
+                یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a>
+              </p>
+            </div>
+          ) : sessionState !== StreamingAvatarSessionState.INACTIVE &&
+            !showQRCode &&
+            !tripId ? (
+            <AvatarVideo ref={mediaStream} showQrCode={showForm} />
+          ) : (
+
+            <AvatarConfig config={config} onConfigChange={setConfig} />
+          )}
         </div>
         <div className="flex flex-col gap-3 items-center justify-center p-4 border-t border-zinc-700 w-full">
-          {sessionState === StreamingAvatarSessionState.CONNECTED ? (
+          {sessionState === StreamingAvatarSessionState.CONNECTED && showDebugPanel ? (
             <AvatarControls />
           ) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
             <div>
@@ -467,22 +473,13 @@ function InteractiveAvatar() {
                   Start Text Chat
                 </Button>
               </div>
-
-              {/* <div className="flex flex-row gap-4">
-                <button
-                  className={isRecording ? "secondary" : "primary"}
-                  onClick={toggleRecording}
-                >
-                  {isRecording ? "Stop Recording" : "Start Recording"}
-                </button>
-              </div> */}
             </div>
-          ) : (
+          ) :  sessionState !== StreamingAvatarSessionState.CONNECTED && (
             <LoadingIcon />
           )}
         </div>
       </div>
-      {sessionState === StreamingAvatarSessionState.CONNECTED && (
+      {sessionState === StreamingAvatarSessionState.CONNECTED  && showDebugPanel &&  (
         <MessageHistory />
       )}
     </div>
