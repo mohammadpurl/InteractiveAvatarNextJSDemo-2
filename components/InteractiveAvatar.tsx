@@ -10,7 +10,12 @@ import StreamingAvatar, {
 import { SetStateAction, useEffect, useRef, useState } from "react";
 import { useMemoizedFn, useUnmount } from "ahooks";
 
-import { askQuestion, extractPassengerDataWithOpenAI, saveTrip } from "../services/api";
+import QRCode from "react-qr-code";
+import {
+  askQuestion,
+  extractPassengerDataWithOpenAI,
+  saveTrip,
+} from "../services/api";
 
 import { Button } from "./Button";
 import { AvatarConfig } from "./AvatarConfig";
@@ -37,8 +42,9 @@ import { AVATARS } from "@/app/lib/constants";
 import knowledgeBase from "@/app/constants/Knowledge";
 import TicketInfo from "@/types/ticketInfo";
 import { ConfirmEditableForm } from "./ConfirmEditableForm";
-import QRCode from "react-qr-code";
 import { Passenger } from "@/lib/types";
+
+import { FullBodyAvatarVideo } from "./FullBodyAvatarVideo";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.Low,
@@ -150,7 +156,7 @@ function InteractiveAvatar() {
   const { isQrCodeMode, setIsQrCodeMode, isAvatarTalking } =
     useStreamingAvatarContext();
   const [showForm, setShowForm] = useState<boolean>(false);
-  const [showQRCode, setShowQRCode] = useState(false)
+  const [showQRCode, setShowQRCode] = useState(false);
   const [tripId, setTripId] = useState(0);
   const { messages } = useMessageHistory();
   const [defaultFormData, setDefaultFormData] = useState<TicketInfo>({
@@ -349,7 +355,7 @@ function InteractiveAvatar() {
             airportName: data.airportName,
             travelDate: data.travelDate,
             flightNumber: data.flightNumber,
-            passengers: (data.passengers || []).map((p:Passenger) => ({
+            passengers: (data.passengers || []).map((p: Passenger) => ({
               fullName: p.fullName,
               nationalId: p.nationalId,
               luggageCount: p.luggageCount,
@@ -367,8 +373,8 @@ function InteractiveAvatar() {
         })
         .catch((err) => {
           // هندل خطا
-          debugger
-          console.log(err)
+          debugger;
+          console.log(err);
           // stopAvatar();
         });
     }
@@ -410,23 +416,38 @@ function InteractiveAvatar() {
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
           {
-          // showForm && defaultFormData ? (
-          //   <ConfirmEditableForm
-          //     ticketInfo={defaultFormData}
-          //     onConfirm={handleConfirm}
-          //   />
-          showQRCode && tripId ? (
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <h2>برای مشاهده و ویرایش بلیط، QR را اسکن کنید:</h2>
-              <QRCode value={`${window.location.origin}/ticket/${tripId}`} />
-              <p>یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a></p>
-            </div>
-          
-          ) : sessionState !== StreamingAvatarSessionState.INACTIVE && !showQRCode && !tripId  ? (
-            <AvatarVideo ref={mediaStream} showQrCode={showForm} />
-          ) : (
-            <AvatarConfig config={config} onConfigChange={setConfig} />
-          )}
+            // showForm && defaultFormData ? (
+            //   <ConfirmEditableForm
+            //     ticketInfo={defaultFormData}
+            //     onConfirm={handleConfirm}
+            //   />
+            showQRCode && tripId ? (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                }}
+              >
+                <h2>برای مشاهده و ویرایش بلیط، QR را اسکن کنید:</h2>
+                <QRCode value={`${window.location.origin}/ticket/${tripId}`} />
+                <p>
+                  یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a>
+                </p>
+              </div>
+            ) : sessionState !== StreamingAvatarSessionState.INACTIVE &&
+              !showQRCode &&
+              !tripId ? (
+              <AvatarVideo ref={mediaStream} showQrCode={showForm} />
+              // <FullBodyAvatarVideo
+              //   ref={mediaStream}
+              //   showQrCode={showForm}
+              //   lowerBodySrc="/assets/lower-body.png"
+              // />
+            ) : (
+              <AvatarConfig config={config} onConfigChange={setConfig} />
+            )
+          }
         </div>
         <div className="flex flex-col gap-3 items-center justify-center p-4 border-t border-zinc-700 w-full">
           {sessionState === StreamingAvatarSessionState.CONNECTED ? (
