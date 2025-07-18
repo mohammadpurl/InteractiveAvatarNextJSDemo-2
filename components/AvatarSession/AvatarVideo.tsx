@@ -1,6 +1,6 @@
 "use client";
 import React, { forwardRef, useEffect, useRef, useState } from "react";
-import { ConnectionQuality } from "@heygen/streaming-avatar";
+import { ConnectionQuality, StreamingEvents } from "@heygen/streaming-avatar";
 import QRCode from "react-qr-code";
 
 import { useConnectionQuality } from "../logic/useConnectionQuality";
@@ -9,414 +9,515 @@ import { StreamingAvatarSessionState } from "../logic";
 import { CloseIcon } from "../Icons";
 import { Button } from "../Button";
 
-export const AvatarVideo = forwardRef<
-  HTMLVideoElement,
-  { showQrCode?: boolean; qrCodeValue?: string }
->(({ showQrCode = false, qrCodeValue = "" }, ref) => {
-  const { sessionState, stopAvatar } = useStreamingAvatarSession();
-  const { connectionQuality } = useConnectionQuality();
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fallbackVideoRef = useRef<HTMLVideoElement>(null);
-  const lowerBodyRef = useRef<HTMLImageElement>(null);
+export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
+  ({ avatar }, ref) => {
+    const { sessionState, stopAvatar } = useStreamingAvatarSession();
+    const { connectionQuality } = useConnectionQuality();
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const fallbackVideoRef = useRef<HTMLVideoElement>(null);
+    // const lowerBodyRef = useRef<HTMLImageElement>(null);
+    const lowerBodyRef = useRef<HTMLVideoElement>(null);
 
-  const isLoaded = sessionState === StreamingAvatarSessionState.CONNECTED;
-  const [videoVisible, setVideoVisible] = useState(true);
+    const isLoaded = sessionState === StreamingAvatarSessionState.CONNECTED;
+    const [videoVisible, setVideoVisible] = useState(true);
 
-  const [videoOffset, setVideoOffset] = useState({ x: 0, y: 0 });
-  const [videoScale, setVideoScale] = useState(1);
+    const [videoOffset, setVideoOffset] = useState({ x: 0, y: 0 });
+    const [videoScale, setVideoScale] = useState(1);
 
-  const [lowerOffset, setLowerOffset] = useState({ x: 0, y: 0 });
-  const [imageScale, setImageScale] = useState(1);
+    const [lowerOffset, setLowerOffset] = useState({ x: 0, y: 0 });
+    const [imageScale, setImageScale] = useState(1);
 
-  const [isShiftPressed, setIsShiftPressed] = useState(false);
-  const isDragging = useRef(false);
-  const lastMouse = useRef({ x: 0, y: 0 });
+    const [isShiftPressed, setIsShiftPressed] = useState(false);
+    const isDragging = useRef(false);
+    const lastMouse = useRef({ x: 0, y: 0 });
+    const [showControlPanel, setShowControlPanel] = useState(false);
 
-  // canvas responsive
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const resize = () => {
-      const width = canvas.parentElement?.clientWidth ?? 480;
-      canvas.width = width;
-      canvas.height = width * 1.5;
-    };
-    resize();
-    window.addEventListener("resize", resize);
-    return () => window.removeEventListener("resize", resize);
-  }, []);
+    // canvas responsive
+    useEffect(() => {
+      const canvas = canvasRef.current;
 
-  // keyboard shift state
-  useEffect(() => {
-    const down = (e: KeyboardEvent) =>
-      e.key === "Shift" && setIsShiftPressed(true);
-    const up = (e: KeyboardEvent) =>
-      e.key === "Shift" && setIsShiftPressed(false);
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-  }, []);
+      if (!canvas) return;
+      const resize = () => {
+        const width = canvas.parentElement?.clientWidth ?? 480;
 
-  // main drawing
-  useEffect(() => {
-    if (
-      !isLoaded ||
-      !ref ||
-      typeof ref !== "object" ||
-      !ref.current ||
-      !canvasRef.current ||
-      !lowerBodyRef.current
-    )
-      return;
+        canvas.width = width;
+        canvas.height = width * 1.5;
+      };
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext("2d", {
-      willReadFrequently: true,
-      alpha: false,
-    })!;
-    const video = ref.current;
-    const img = lowerBodyRef.current;
+      resize();
+      window.addEventListener("resize", resize);
 
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      if (e.shiftKey) {
-        const delta = e.deltaY > 0 ? -0.05 : 0.05;
-        setVideoScale((prev) => Math.max(0.2, prev + delta));
-      } else {
-        const delta = e.deltaY > 0 ? -0.05 : 0.05;
-        setImageScale((prev) => Math.max(0.1, prev + delta));
+      return () => window.removeEventListener("resize", resize);
+    }, []);
+
+    useEffect(() => {
+      if (avatar) {
+        const lowerVideo = lowerBodyRef.current;
+
+        avatar.on(StreamingEvents.AVATAR_START_TALKING, (event: any) => {
+          console.log(">>>>>  Avarat Start Talking", event);
+          lowerVideo?.play();
+         
+        });
+        avatar.on(StreamingEvents.AVATAR_STOP_TALKING, (event: any) => {
+          console.log(">>>>>  Avarat Stop Talking", event);
+          lowerVideo?.pause();
+        });
       }
-    };
+    }, [avatar]);
 
-    const handleMouseDown = (e: MouseEvent) => {
-      if (!isShiftPressed) return;
-      isDragging.current = true;
-      lastMouse.current = { x: e.clientX, y: e.clientY };
-    };
+    // keyboard shift state
+    useEffect(() => {
+      const down = (e: KeyboardEvent) =>
+        e.key === "Shift" && setIsShiftPressed(true);
+      const up = (e: KeyboardEvent) =>
+        e.key === "Shift" && setIsShiftPressed(false);
 
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current || !isShiftPressed) return;
-      const dx = e.clientX - lastMouse.current.x;
-      const dy = e.clientY - lastMouse.current.y;
-      setVideoOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-      lastMouse.current = { x: e.clientX, y: e.clientY };
-    };
+      window.addEventListener("keydown", down);
+      window.addEventListener("keyup", up);
 
-    const handleMouseUp = () => {
-      isDragging.current = false;
-    };
+      return () => {
+        window.removeEventListener("keydown", down);
+        window.removeEventListener("keyup", up);
+      };
+    }, []);
 
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
-    canvas.addEventListener("mousedown", handleMouseDown);
-    canvas.addEventListener("mousemove", handleMouseMove);
-    canvas.addEventListener("mouseup", handleMouseUp);
-    canvas.addEventListener("mouseleave", handleMouseUp);
-
-    const draw = () => {
-      const cw = canvas.width;
-      const ch = canvas.height;
-      const vw = video.videoWidth;
-      const vh = video.videoHeight;
-
-      if (!vw || !vh) {
-        requestAnimationFrame(draw);
+    // main drawing
+    useEffect(() => {
+      if (
+        !isLoaded ||
+        !ref ||
+        typeof ref !== "object" ||
+        !ref.current ||
+        !canvasRef.current ||
+        !lowerBodyRef.current
+      )
         return;
-      }
 
-      const tmpCanvas = document.createElement("canvas");
-      tmpCanvas.width = vw;
-      tmpCanvas.height = vh;
-      const tmpCtx = tmpCanvas.getContext("2d")!;
-      tmpCtx.drawImage(video, 0, 0);
-      const frame = tmpCtx.getImageData(0, 0, vw, vh);
-      const data = frame.data;
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", {
+        willReadFrequently: true,
+        alpha: false,
+      })!;
+      const video = ref.current;
+      // const img = lowerBodyRef.current;
+      const videoElement = lowerBodyRef.current!;
+      const vw2 = videoElement.videoWidth;
+      const vh2 = videoElement.videoHeight;
 
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i],
-          g = data[i + 1],
-          b = data[i + 2];
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        const delta = max - min;
-        let h = 0;
-        if (delta !== 0) {
-          if (max === r) h = ((g - b) / delta) % 6;
-          else if (max === g) h = (b - r) / delta + 2;
-          else h = (r - g) / delta + 4;
+      const handleWheel = (e: WheelEvent) => {
+        e.preventDefault();
+        if (e.shiftKey) {
+          const delta = e.deltaY > 0 ? -0.05 : 0.05;
+
+          setVideoScale((prev) => Math.max(0.2, prev + delta));
+        } else {
+          const delta = e.deltaY > 0 ? -0.05 : 0.05;
+
+          setImageScale((prev) => Math.max(0.1, prev + delta));
         }
-        h = Math.round(h * 60);
-        if (h < 0) h += 360;
-        const s = max === 0 ? 0 : delta / max;
-        const isGreen =
-          h >= 60 && h <= 180 && s > 0.1 && g > r * 1.0 && g > b * 1.0;
-        //   const isGreen =
-        // h >= options.minHue &&
-        // h <= options.maxHue &&
-        // s > options.minSaturation &&
-        // v > 0.15 &&
-        // g > r * options.threshold &&
-        // g > b * options.threshold;
+      };
 
-        if (isGreen) {
-          const greenness = (g - Math.max(r, b)) / (g || 1);
-          const alphaValue = Math.max(0, 1 - greenness * 4);
+      const handleMouseDown = (e: MouseEvent) => {
+        if (!isShiftPressed) return;
+        isDragging.current = true;
+        lastMouse.current = { x: e.clientX, y: e.clientY };
+      };
 
-          data[i + 3] = alphaValue < 0.2 ? 0 : Math.round(alphaValue * 255);
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isDragging.current || !isShiftPressed) return;
+        const dx = e.clientX - lastMouse.current.x;
+        const dy = e.clientY - lastMouse.current.y;
+
+        setVideoOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+        lastMouse.current = { x: e.clientX, y: e.clientY };
+      };
+
+      const handleMouseUp = () => {
+        isDragging.current = false;
+      };
+
+      canvas.addEventListener("wheel", handleWheel, { passive: false });
+      canvas.addEventListener("mousedown", handleMouseDown);
+      canvas.addEventListener("mousemove", handleMouseMove);
+      canvas.addEventListener("mouseup", handleMouseUp);
+      canvas.addEventListener("mouseleave", handleMouseUp);
+
+      const draw = () => {
+        const cw = canvas.width;
+        const ch = canvas.height;
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+
+        if (!vw || !vh) {
+          requestAnimationFrame(draw);
+
+          return;
         }
-        // if (isGreen) {
-        //   data[i] = 255;
-        //   data[i + 1] = 255;
-        //   data[i + 2] = 255;
-        //   data[i + 3] = 255;
+
+        const tmpCanvas = document.createElement("canvas");
+
+        tmpCanvas.width = vw;
+        tmpCanvas.height = vh;
+        const tmpCtx = tmpCanvas.getContext("2d")!;
+
+        tmpCtx.drawImage(video, 0, 0);
+        const frame = tmpCtx.getImageData(0, 0, vw, vh);
+        const data = frame.data;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i],
+            g = data[i + 1],
+            b = data[i + 2];
+          const max = Math.max(r, g, b);
+          const min = Math.min(r, g, b);
+          const delta = max - min;
+          let h = 0;
+
+          if (delta !== 0) {
+            if (max === r) h = ((g - b) / delta) % 6;
+            else if (max === g) h = (b - r) / delta + 2;
+            else h = (r - g) / delta + 4;
+          }
+          h = Math.round(h * 60);
+          if (h < 0) h += 360;
+          const s = max === 0 ? 0 : delta / max;
+          const isGreen =
+            h >= 60 && h <= 180 && s > 0.1 && g > r * 1.0 && g > b * 1.0;
+          //   const isGreen =
+          // h >= options.minHue &&
+          // h <= options.maxHue &&
+          // s > options.minSaturation &&
+          // v > 0.15 &&
+          // g > r * options.threshold &&
+          // g > b * options.threshold;
+
+          if (isGreen) {
+            const greenness = (g - Math.max(r, b)) / (g || 1);
+            const alphaValue = Math.max(0, 1 - greenness * 4);
+
+            data[i + 3] = alphaValue < 0.2 ? 0 : Math.round(alphaValue * 255);
+          }
+          // if (isGreen) {
+          //   data[i] = 255;
+          //   data[i + 1] = 255;
+          //   data[i + 2] = 255;
+          //   data[i + 3] = 255;
+          // }
+          // if (isGreen) {
+          //   data[i + 3] = 0; // شفاف‌سازی پیکسل
+          // }
+        }
+
+        tmpCtx.putImageData(frame, 0, 0);
+
+        ctx.clearRect(0, 0, cw, ch);
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, cw, ch);
+
+        // const imgAspectRatio = img.width / img.height;
+        // const canvasAspectRatio = cw / ch;
+
+        // let drawWidth = cw;
+        // let drawHeight = ch;
+
+        // if (imgAspectRatio > canvasAspectRatio) {
+        //   drawHeight = cw / imgAspectRatio;
+        // } else {
+        //   drawWidth = ch * imgAspectRatio;
         // }
-        // if (isGreen) {
-        //   data[i + 3] = 0; // شفاف‌سازی پیکسل
-        // }
-      }
 
-      tmpCtx.putImageData(frame, 0, 0);
+        // drawWidth *= imageScale;
+        // drawHeight *= imageScale;
 
-      ctx.clearRect(0, 0, cw, ch);
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, cw, ch);
+        // const drawX = (cw - drawWidth) / 2 + lowerOffset.x;
+        // const drawY = (ch - drawHeight) / 2 + lowerOffset.y;
+        // draw video on top
 
-      // draw lower body
-      // const iw = img.width * imageScale;
-      // const ih = img.height * imageScale;
-      // const ix = (cw - iw) / 2 + lowerOffset.x;
-      // const iy = ch / 2 + lowerOffset.y;
-      // ctx.drawImage(img, ix, iy, iw, ih);
-      const imgAspectRatio = img.width / img.height;
-      const canvasAspectRatio = cw / ch;
+        if (vw2 && vh2) {
+          const imgAspectRatio = vw2 / vh2;
+          const canvasAspectRatio = cw / ch;
 
-      let drawWidth = cw;
-      let drawHeight = ch;
+          let drawWidth = cw;
+          let drawHeight = ch;
 
-      if (imgAspectRatio > canvasAspectRatio) {
-        drawHeight = cw / imgAspectRatio;
-      } else {
-        drawWidth = ch * imgAspectRatio;
-      }
+          if (imgAspectRatio > canvasAspectRatio) {
+            drawHeight = cw / imgAspectRatio;
+          } else {
+            drawWidth = ch * imgAspectRatio;
+          }
 
-      drawWidth *= imageScale;
-      drawHeight *= imageScale;
+          drawWidth *= imageScale;
+          drawHeight *= imageScale;
 
-      const drawX = (cw - drawWidth) / 2 + lowerOffset.x;
-      const drawY = (ch - drawHeight) / 2 + lowerOffset.y;
+          const drawX = (cw - drawWidth) / 2 + lowerOffset.x;
+          const drawY = (ch - drawHeight) / 2 + lowerOffset.y;
+          const cropTop = vh2 * 0.5; // یک‌سوم بالا را حذف کنیم
+          const cropHeight = vh2 - cropTop;
 
-      ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+          ctx.drawImage(
+            videoElement,
+            0,
+            cropTop, // از یک‌سوم بالا شروع کن
+            vw2,
+            cropHeight, // فقط ۲/۳ پایین رو بگیر
+            drawX,
+            drawY,
+            drawWidth,
+            drawHeight,
+          );
+          // ctx.drawImage(videoElement, drawX, drawY, drawWidth, drawHeight);
+        }
 
-      // draw video on top
-      const scaledVideoWidth = cw * videoScale;
-      const scaledVideoHeight = (ch / 2) * videoScale;
-      const videoX = (cw - scaledVideoWidth) / 2 + videoOffset.x;
-      const videoY = videoOffset.y;
+        const scaledVideoWidth = cw * videoScale;
+        const scaledVideoHeight = (ch / 2) * videoScale;
+        const videoX = (cw - scaledVideoWidth) / 2 + videoOffset.x;
+        const videoY = videoOffset.y;
 
-      // فقط 40 درصد بالایی ویدئو را بکش:
-      ctx.drawImage(
-        tmpCanvas,
-        0,
-        0,
-        vw,
-        vh * 0.5,
-        videoX,
-        videoY,
-        scaledVideoWidth,
-        scaledVideoHeight,
-      );
+        // فقط 40 درصد بالایی ویدئو را بکش:
+        ctx.drawImage(
+          tmpCanvas,
+          0,
+          0,
+          vw,
+          vh,
+          videoX,
+          videoY,
+          scaledVideoWidth,
+          scaledVideoHeight,
+        );
+
+        // const cropHeadHeight = vh  * 0.6; // فقط نیمه بالایی
+        // ctx.drawImage(
+        //   tmpCanvas,
+        //   0, 0,         // مبدا برش
+        //   vw, cropHeadHeight, // فقط نصف بالا
+        //   videoX, videoY,
+        //   scaledVideoWidth,
+        //   (scaledVideoHeight / 2), // یا تناسب‌دار بکشی
+        // );
+
+        requestAnimationFrame(draw);
+      };
 
       requestAnimationFrame(draw);
-    };
 
-    requestAnimationFrame(draw);
+      return () => {
+        canvas.removeEventListener("wheel", handleWheel);
+        canvas.removeEventListener("mousedown", handleMouseDown);
+        canvas.removeEventListener("mousemove", handleMouseMove);
+        canvas.removeEventListener("mouseup", handleMouseUp);
+        canvas.removeEventListener("mouseleave", handleMouseUp);
+      };
+    }, [
+      isLoaded,
+      ref,
+      videoOffset,
+      videoScale,
+      lowerOffset,
+      imageScale,
+      isShiftPressed,
+    ]);
 
-    return () => {
-      canvas.removeEventListener("wheel", handleWheel);
-      canvas.removeEventListener("mousedown", handleMouseDown);
-      canvas.removeEventListener("mousemove", handleMouseMove);
-      canvas.removeEventListener("mouseup", handleMouseUp);
-      canvas.removeEventListener("mouseleave", handleMouseUp);
-    };
-  }, [
-    isLoaded,
-    ref,
-    videoOffset,
-    videoScale,
-    lowerOffset,
-    imageScale,
-    isShiftPressed,
-  ]);
+    useEffect(() => {
+      if (!ref || typeof ref !== "object" || !ref.current) return;
+      const video = ref.current;
+      const checkVisibility = () => {
+        const rect = video.getBoundingClientRect();
 
-  useEffect(() => {
-    if (!ref || typeof ref !== "object" || !ref.current) return;
-    const video = ref.current;
-    const checkVisibility = () => {
-      const rect = video.getBoundingClientRect();
+        setVideoVisible(!(rect.width === 0 || rect.height === 0));
+      };
+      const observer = new ResizeObserver(checkVisibility);
 
-      setVideoVisible(!(rect.width === 0 || rect.height === 0));
-    };
-    const observer = new ResizeObserver(checkVisibility);
+      observer.observe(video);
 
-    observer.observe(video);
+      return () => observer.disconnect();
+    }, [ref]);
 
-    return () => observer.disconnect();
-  }, [ref]);
+    useEffect(() => {
+      if (!ref || typeof ref !== "object" || !ref.current) return;
+      const video = ref.current;
+      const fetchConfig = async () => {
+        try {
+          const res = await fetch("/api/get-avatar-config");
+          const config = await res.json();
 
-  useEffect(() => {
-    if (!ref || typeof ref !== "object" || !ref.current) return;
-    const video = ref.current;
-    const fetchConfig = async () => {
-      try {
-        const res = await fetch("/api/get-avatar-config");
-        const config = await res.json();
-
-        if (config) {
-          setVideoOffset(config.videoOffset);
-          setVideoScale(config.videoScale);
-          setLowerOffset(config.lowerOffset);
-          setImageScale(config.imageScale);
+          if (config) {
+            setVideoOffset(config.videoOffset);
+            setVideoScale(config.videoScale);
+            setLowerOffset(config.lowerOffset);
+            setImageScale(config.imageScale);
+          }
+        } catch (e) {
+          console.warn("پیکربندی پیش‌فرض یافت نشد یا خطا داشت");
         }
-      } catch (e) {
-        console.warn("پیکربندی پیش‌فرض یافت نشد یا خطا داشت");
-      }
-    };
-    fetchConfig();
-  }, [ref]);
+      };
 
-  return (
-    <div className="relative bg-white w-full h-full">
-      {connectionQuality !== ConnectionQuality.UNKNOWN && (
-        
+      // fetchConfig();
+    }, [ref]);
+
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.ctrlKey && e.key.toLowerCase() === "i") {
+          e.preventDefault();
+          setShowControlPanel((prev) => !prev);
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }, []);
+
+    return (
+      <div className="relative bg-white w-full h-full">
+        {connectionQuality !== ConnectionQuality.UNKNOWN && (
           <div className="absolute flex flex-col top-3 left-3 bg-black text-white rounded-lg px-3 py-2 z-20">
-            Connection Quality: {connectionQuality} 
+            Connection Quality: {connectionQuality}
             <Button
-            className=" top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-20"
-            onClick={async () => {
-              const config = {
-                videoOffset,
-                videoScale,
-                lowerOffset,
-                imageScale,
-              };
+              className=" top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-20"
+              onClick={async () => {
+                const config = {
+                  videoOffset,
+                  videoScale,
+                  lowerOffset,
+                  imageScale,
+                };
 
-              try {
-                await fetch("/api/save-avatar-config", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(config),
-                });
-                alert("تنظیمات ذخیره شد");
-              } catch (e) {
-                alert("خطا در ذخیره‌سازی");
-              }
-            }}
-          >
-            ذخیره تنظیمات
-          </Button>
+                try {
+                  await fetch("/api/save-avatar-config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(config),
+                  });
+                  alert("تنظیمات ذخیره شد");
+                } catch (e) {
+                  alert("خطا در ذخیره‌سازی");
+                }
+              }}
+            >
+              ذخیره تنظیمات
+            </Button>
           </div>
-         
-      )}
-      {isLoaded && (
-        <Button
-          className="absolute top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-20"
-          onClick={stopAvatar}
-        >
-          <CloseIcon />
-        </Button>
-      )}
-      <>
-        <video
-          ref={ref}
-          autoPlay
-          playsInline
-          muted={false}
-          onError={() => setVideoVisible(false)}
-          onEnded={() => setVideoVisible(false)}
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            opacity: 0,
-            zIndex: -1,
-            objectFit: "cover",
-          }}
-        />
-        <canvas
-          ref={canvasRef}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
-        />
-        <img
-          ref={lowerBodyRef}
-          src="/assets/1.jpg"
-          alt="lower-body"
-          style={{ display: "none" }}
-        />
-        {!videoVisible && (
+        )}
+        {isLoaded && (
+          <Button
+            className="absolute top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-20"
+            onClick={stopAvatar}
+          >
+            <CloseIcon />
+          </Button>
+        )}
+        <>
           <video
-            ref={fallbackVideoRef}
-            src="/videos/fallback.mp4"
+            ref={ref}
+            autoPlay
+            playsInline
+            muted={false}
+            onError={() => setVideoVisible(false)}
+            onEnded={() => setVideoVisible(false)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              opacity: 0,
+              zIndex: -1,
+              objectFit: "cover",
+            }}
+          />
+          <canvas
+            ref={canvasRef}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+          <video
+            ref={lowerBodyRef as React.MutableRefObject<HTMLVideoElement>}
+            src="/videos/lower-body.mp4"
             autoPlay
             loop
             muted
-            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            playsInline
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              visibility: "hidden",
+              width: "1px",
+              height: "1px",
+            }}
           />
+
+          {!videoVisible && (
+            <video
+              ref={fallbackVideoRef}
+              src="/videos/fallback.mp4"
+              autoPlay
+              loop
+              muted
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          )}
+        </>
+        {/* )} */}
+
+        {!isLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            Loading...
+          </div>
         )}
-      </>
-      {/* )} */}
 
-      {!isLoaded && !showQrCode && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          Loading...
-        </div>
-      )}
-
-      {/* Controls for lower-body image */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col gap-2 items-center bg-white bg-opacity-70 p-2 rounded">
-        <div className="flex gap-2">
-          <button
-            onClick={() => setLowerOffset((p) => ({ ...p, y: p.y - 10 }))}
-          >
-            ⬆️
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setLowerOffset((p) => ({ ...p, x: p.x - 10 }))}
-          >
-            ⬅️
-          </button>
-          <button
-            onClick={() => setLowerOffset((p) => ({ ...p, x: p.x + 10 }))}
-          >
-            ➡️
-          </button>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setLowerOffset((p) => ({ ...p, y: p.y + 10 }))}
-          >
-            ⬇️
-          </button>
-        </div>
-        <div className="flex gap-2 mt-2">
-          <button onClick={() => setImageScale((p) => Math.min(p + 0.1, 3))}>
-            ➕ Zoom In
-          </button>
-          <button onClick={() => setImageScale((p) => Math.max(p - 0.1, 0.2))}>
-            ➖ Zoom Out
-          </button>
-        </div>
-        <p className="text-xs text-gray-600 mt-1">
-          Use <b>Shift + Mouse</b> to zoom/move video
-        </p>
+        {/* Controls for lower-body image */}
+        {showControlPanel && (
+          <div className="absolute  bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col gap-2 items-center bg-white bg-opacity-70 p-2 rounded">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLowerOffset((p) => ({ ...p, y: p.y - 10 }))}
+              >
+                ⬆️
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLowerOffset((p) => ({ ...p, x: p.x - 10 }))}
+              >
+                ⬅️
+              </button>
+              <button
+                onClick={() => setLowerOffset((p) => ({ ...p, x: p.x + 10 }))}
+              >
+                ➡️
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLowerOffset((p) => ({ ...p, y: p.y + 10 }))}
+              >
+                ⬇️
+              </button>
+            </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => setImageScale((p) => Math.min(p + 0.1, 3))}
+              >
+                ➕ Zoom In
+              </button>
+              <button
+                onClick={() => setImageScale((p) => Math.max(p - 0.1, 0.2))}
+              >
+                ➖ Zoom Out
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              Use <b>Shift + Mouse</b> to zoom/move video
+            </p>
+          </div>
+        )}
       </div>
-    </div>
-  );
-});
+    );
+  },
+);
 
 AvatarVideo.displayName = "AvatarVideo";

@@ -47,7 +47,7 @@ import { Passenger } from "@/lib/types";
 import { FullBodyAvatarVideo } from "./FullBodyAvatarVideo";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
-  quality: AvatarQuality.Low,
+  quality: AvatarQuality.High,
   avatarName: AVATARS[0].avatar_id,
   voice: {
     voiceId: "508da0af14044417a916cba1d00f632a",
@@ -449,7 +449,7 @@ function InteractiveAvatar() {
           ) : sessionState !== StreamingAvatarSessionState.INACTIVE &&
             !showQRCode &&
             !tripId ? (
-            <AvatarVideo ref={mediaStream} showQrCode={showForm} />
+            <AvatarVideo ref={mediaStream} avatar={avatar} />
           ) : (
 
             <AvatarConfig config={config} onConfigChange={setConfig} />

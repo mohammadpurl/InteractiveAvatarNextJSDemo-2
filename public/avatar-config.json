@@ -1,12 +1,12 @@
 {
   "videoOffset": {
-    "x": -15,
-    "y": 36
+    "x": -1,
+    "y": -108
   },
-  "videoScale": 0.39999999999999963,
+  "videoScale": 1.05,
   "lowerOffset": {
-    "x": 0,
-    "y": 490
+    "x": 10,
+    "y": 540
   },
-  "imageScale": 1.5500000000000005
+  "imageScale": 1.8500000000000005
 }
