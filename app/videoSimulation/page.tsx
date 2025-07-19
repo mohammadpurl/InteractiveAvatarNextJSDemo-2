@@ -1,4 +1,4 @@
-'use client'
+"use client";
 
 import React, { useEffect, useRef, useState } from "react";
 
@@ -68,43 +68,42 @@ export default function FullBodyEditor() {
     let animationFrameId: number;
 
     // ارتفاع بالاتنه (مثلاً یک سوم ویدئو)
-    const upperBodyHeightInVideo =  video.videoHeight ;
+    const upperBodyHeightInVideo = video.videoHeight;
 
     const draw = () => {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-        // بک‌گراند سفید
-        ctx.fillStyle = "white";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-        // ارتفاع بالاتنه (می‌خوای ویدئو کل بالا باشه، مثلا نصف ارتفاع canvas)
-        const upperBodyHeightOnCanvas = canvas.height / 2;
-      
-        // کشیدن ویدئو (بالای canvas)
-        ctx.drawImage(
-          video,
-          0,
-          0,
-          video.videoWidth,
-          video.videoHeight,
-          0,
-          0,
-          canvas.width,
-          upperBodyHeightOnCanvas
-        );
-      
-        // اندازه و موقعیت تصویر پایین‌تنه
-        const imgWidth = img.width * imgScale;
-        const imgHeight = img.height * imgScale;
-        const imgX = (canvas.width - imgWidth) / 2 + imgOffset.x; // وسط افقی + آفست
-        const imgY = upperBodyHeightOnCanvas + imgOffset.y; // پایین ویدئو + آفست
-      
-        // کشیدن تصویر پایین‌تنه
-        ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
-      
-        animationFrameId = requestAnimationFrame(draw);
-      };
-      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // بک‌گراند سفید
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // ارتفاع بالاتنه (می‌خوای ویدئو کل بالا باشه، مثلا نصف ارتفاع canvas)
+      const upperBodyHeightOnCanvas = canvas.height / 2;
+
+      // کشیدن ویدئو (بالای canvas)
+      ctx.drawImage(
+        video,
+        0,
+        0,
+        video.videoWidth,
+        video.videoHeight,
+        0,
+        0,
+        canvas.width,
+        upperBodyHeightOnCanvas,
+      );
+
+      // اندازه و موقعیت تصویر پایین‌تنه
+      const imgWidth = img.width * imgScale;
+      const imgHeight = img.height * imgScale;
+      const imgX = (canvas.width - imgWidth) / 2 + imgOffset.x; // وسط افقی + آفست
+      const imgY = upperBodyHeightOnCanvas + imgOffset.y; // پایین ویدئو + آفست
+
+      // کشیدن تصویر پایین‌تنه
+      ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+
+      animationFrameId = requestAnimationFrame(draw);
+    };
 
     draw();
 
@@ -118,12 +117,9 @@ export default function FullBodyEditor() {
 
   // کنترل زوم تصویر پایین تنه
   const zoomImage = (delta: number) => {
-    setImgScale((prev) => Math.max(0.05,prev + delta));
-        
+    setImgScale((prev) => Math.max(0.05, prev + delta));
   };
 
-
- 
   return (
     <div className="flex flex-col items-center gap-4 p-4 max-w-full">
       <div className="w-full max-w-[480px]">
@@ -158,15 +154,14 @@ export default function FullBodyEditor() {
       {/* ویدئو با کنترل برای تست */}
       <video
         ref={videoRef}
-        src="/videos/heygen-output.mp4"        
+        src="/videos/heygen-output.mp4"
         loop
         autoPlay
         muted
         playsInline
         controls
-        style={{ width:320, marginTop: 20 }}
-        
-        
+        style={{ width: 320, marginTop: 20 }}
+
         // style={{ display: "none" }}
       />
 
@@ -175,8 +170,7 @@ export default function FullBodyEditor() {
         ref={imgRef}
         src="/assets/lower-body.png"
         alt="Lower body"
-        style={{ display: "none", border:'none' }}
-
+        style={{ display: "none", border: "none" }}
       />
     </div>
   );

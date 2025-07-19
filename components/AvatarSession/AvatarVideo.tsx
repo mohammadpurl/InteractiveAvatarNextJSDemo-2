@@ -1,8 +1,6 @@
 "use client";
-import React, { forwardRef, useEffect, useRef, useState } from "react";
+import React, { forwardRef, useEffect, useRef, useState, RefObject } from "react";
 import { ConnectionQuality, StreamingEvents } from "@heygen/streaming-avatar";
-import QRCode from "react-qr-code";
-
 import { useConnectionQuality } from "../logic/useConnectionQuality";
 import { useStreamingAvatarSession } from "../logic/useStreamingAvatarSession";
 import { StreamingAvatarSessionState } from "../logic";
@@ -15,7 +13,6 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
     const { connectionQuality } = useConnectionQuality();
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fallbackVideoRef = useRef<HTMLVideoElement>(null);
-    // const lowerBodyRef = useRef<HTMLImageElement>(null);
     const lowerBodyRef = useRef<HTMLVideoElement>(null);
 
     const isLoaded = sessionState === StreamingAvatarSessionState.CONNECTED;
@@ -23,16 +20,28 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
 
     const [videoOffset, setVideoOffset] = useState({ x: 0, y: 0 });
     const [videoScale, setVideoScale] = useState(1);
-
     const [lowerOffset, setLowerOffset] = useState({ x: 0, y: 0 });
     const [imageScale, setImageScale] = useState(1);
 
     const [isShiftPressed, setIsShiftPressed] = useState(false);
-    const isDragging = useRef(false);
-    const lastMouse = useRef({ x: 0, y: 0 });
     const [showControlPanel, setShowControlPanel] = useState(false);
 
-    // canvas responsive
+    // تنظیم خودکار مقیاس و جابجایی بر اساس ابعاد ویدئوها
+    useEffect(() => {
+      if ((ref as RefObject<HTMLVideoElement>)?.current?.videoWidth && lowerBodyRef.current?.videoWidth) {
+        const headHeight = (ref as RefObject<HTMLVideoElement>).current.videoHeight * 0.5; // بخش بالایی سر
+        const bodyHeight = lowerBodyRef.current.videoHeight * 0.7; // بخش قابل‌استفاده بدنه
+        const headAspectRatio = (ref as RefObject<HTMLVideoElement>).current.videoWidth / (ref as RefObject<HTMLVideoElement>).current.videoHeight;
+        const bodyAspectRatio = lowerBodyRef.current.videoWidth / lowerBodyRef.current.videoHeight;
+
+        setVideoScale(bodyHeight / headHeight);
+        setImageScale(headAspectRatio / bodyAspectRatio);
+        setVideoOffset({ x: 0, y: headHeight });
+        setLowerOffset({ x: 0, y: headHeight });
+      }
+    }, [ref, lowerBodyRef]);
+
+    // تنظیم ریسایز canvas
     useEffect(() => {
       const canvas = canvasRef.current;
 
@@ -50,39 +59,65 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
       return () => window.removeEventListener("resize", resize);
     }, []);
 
+    // مدیریت رویدادهای صحبت کردن آواتار
     useEffect(() => {
       if (avatar) {
         const lowerVideo = lowerBodyRef.current;
 
-        avatar.on(StreamingEvents.AVATAR_START_TALKING, (event: any) => {
-          console.log(">>>>>  Avarat Start Talking", event);
+        avatar.on(StreamingEvents.AVATAR_START_TALKING, () => {
           lowerVideo?.play();
-         
         });
-        avatar.on(StreamingEvents.AVATAR_STOP_TALKING, (event: any) => {
-          console.log(">>>>>  Avarat Stop Talking", event);
+        avatar.on(StreamingEvents.AVATAR_STOP_TALKING, () => {
           lowerVideo?.pause();
         });
       }
     }, [avatar]);
 
-    // keyboard shift state
+    // مدیریت وضعیت کلید Shift و جابجایی با Arrow Keys
     useEffect(() => {
-      const down = (e: KeyboardEvent) =>
-        e.key === "Shift" && setIsShiftPressed(true);
-      const up = (e: KeyboardEvent) =>
-        e.key === "Shift" && setIsShiftPressed(false);
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (!isShiftPressed) return;
+        const step = 10; // مقدار جابجایی با هر فشار کلید
 
-      window.addEventListener("keydown", down);
-      window.addEventListener("keyup", up);
+        switch (e.key) {
+          case "ArrowUp":
+            e.preventDefault();
+            setVideoOffset((prev) => ({ x: prev.x, y: prev.y - step }));
+            break;
+          case "ArrowDown":
+            e.preventDefault();
+            setVideoOffset((prev) => ({ x: prev.x, y: prev.y + step }));
+            break;
+          case "ArrowLeft":
+            e.preventDefault();
+            setVideoOffset((prev) => ({ x: prev.x - step, y: prev.y }));
+            break;
+          case "ArrowRight":
+            e.preventDefault();
+            setVideoOffset((prev) => ({ x: prev.x + step, y: prev.y }));
+            break;
+          case "Shift":
+            setIsShiftPressed(true);
+            break;
+        }
+      };
+
+      const handleKeyUp = (e: KeyboardEvent) => {
+        if (e.key === "Shift") {
+          setIsShiftPressed(false);
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+      window.addEventListener("keyup", handleKeyUp);
 
       return () => {
-        window.removeEventListener("keydown", down);
-        window.removeEventListener("keyup", up);
+        window.removeEventListener("keydown", handleKeyDown);
+        window.removeEventListener("keyup", handleKeyUp);
       };
-    }, []);
+    }, [isShiftPressed]);
 
-    // main drawing
+    // زوم با چرخ ماوس (بدون جابجایی با ماوس)
     useEffect(() => {
       if (
         !isLoaded ||
@@ -95,53 +130,45 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
         return;
 
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext("2d", {
-        willReadFrequently: true,
-        alpha: false,
-      })!;
-      const video = ref.current;
-      // const img = lowerBodyRef.current;
-      const videoElement = lowerBodyRef.current!;
-      const vw2 = videoElement.videoWidth;
-      const vh2 = videoElement.videoHeight;
+
+      if (!canvas) return;
 
       const handleWheel = (e: WheelEvent) => {
         e.preventDefault();
-        if (e.shiftKey) {
-          const delta = e.deltaY > 0 ? -0.05 : 0.05;
+        const delta = e.deltaY > 0 ? -0.05 : 0.05;
 
+        if (e.shiftKey) {
           setVideoScale((prev) => Math.max(0.2, prev + delta));
         } else {
-          const delta = e.deltaY > 0 ? -0.05 : 0.05;
-
           setImageScale((prev) => Math.max(0.1, prev + delta));
         }
       };
 
-      const handleMouseDown = (e: MouseEvent) => {
-        if (!isShiftPressed) return;
-        isDragging.current = true;
-        lastMouse.current = { x: e.clientX, y: e.clientY };
-      };
-
-      const handleMouseMove = (e: MouseEvent) => {
-        if (!isDragging.current || !isShiftPressed) return;
-        const dx = e.clientX - lastMouse.current.x;
-        const dy = e.clientY - lastMouse.current.y;
-
-        setVideoOffset((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-        lastMouse.current = { x: e.clientX, y: e.clientY };
-      };
-
-      const handleMouseUp = () => {
-        isDragging.current = false;
-      };
-
       canvas.addEventListener("wheel", handleWheel, { passive: false });
-      canvas.addEventListener("mousedown", handleMouseDown);
-      canvas.addEventListener("mousemove", handleMouseMove);
-      canvas.addEventListener("mouseup", handleMouseUp);
-      canvas.addEventListener("mouseleave", handleMouseUp);
+
+      return () => canvas.removeEventListener("wheel", handleWheel);
+    }, []);
+
+    // رسم روی canvas
+    useEffect(() => {
+      if (
+        !isLoaded ||
+        !ref ||
+        typeof ref !== "object" ||
+        !(ref as RefObject<HTMLVideoElement>).current ||
+        !canvasRef.current ||
+        !lowerBodyRef.current
+      )
+        return;
+
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true, alpha: true })!;
+      const video = (ref as RefObject<HTMLVideoElement>).current;
+      const videoElement = lowerBodyRef.current;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight;
+      const vw2 = videoElement.videoWidth;
+      const vh2 = videoElement.videoHeight;
 
       const draw = () => {
         const cw = canvas.width;
@@ -149,7 +176,7 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
         const vw = video.videoWidth;
         const vh = video.videoHeight;
 
-        if (!vw || !vh) {
+        if (!vw || !vh || !vw2 || !vh2) {
           requestAnimationFrame(draw);
 
           return;
@@ -182,15 +209,7 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
           h = Math.round(h * 60);
           if (h < 0) h += 360;
           const s = max === 0 ? 0 : delta / max;
-          const isGreen =
-            h >= 60 && h <= 180 && s > 0.1 && g > r * 1.0 && g > b * 1.0;
-          //   const isGreen =
-          // h >= options.minHue &&
-          // h <= options.maxHue &&
-          // s > options.minSaturation &&
-          // v > 0.15 &&
-          // g > r * options.threshold &&
-          // g > b * options.threshold;
+          const isGreen = h >= 60 && h <= 180 && s > 0.1 && g > r * 1.0 && g > b * 1.0;
 
           if (isGreen) {
             const greenness = (g - Math.max(r, b)) / (g || 1);
@@ -198,117 +217,67 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
 
             data[i + 3] = alphaValue < 0.2 ? 0 : Math.round(alphaValue * 255);
           }
-          // if (isGreen) {
-          //   data[i] = 255;
-          //   data[i + 1] = 255;
-          //   data[i + 2] = 255;
-          //   data[i + 3] = 255;
-          // }
-          // if (isGreen) {
-          //   data[i + 3] = 0; // شفاف‌سازی پیکسل
-          // }
         }
-
         tmpCtx.putImageData(frame, 0, 0);
 
         ctx.clearRect(0, 0, cw, ch);
         ctx.fillStyle = "white";
         ctx.fillRect(0, 0, cw, ch);
 
-        // const imgAspectRatio = img.width / img.height;
-        // const canvasAspectRatio = cw / ch;
+        // رسم بدنه
+        const imgAspectRatio = vw2 / vh2;
+        const canvasAspectRatio = cw / ch;
+        let drawWidth = cw;
+        let drawHeight = ch;
 
-        // let drawWidth = cw;
-        // let drawHeight = ch;
-
-        // if (imgAspectRatio > canvasAspectRatio) {
-        //   drawHeight = cw / imgAspectRatio;
-        // } else {
-        //   drawWidth = ch * imgAspectRatio;
-        // }
-
-        // drawWidth *= imageScale;
-        // drawHeight *= imageScale;
-
-        // const drawX = (cw - drawWidth) / 2 + lowerOffset.x;
-        // const drawY = (ch - drawHeight) / 2 + lowerOffset.y;
-        // draw video on top
-
-        if (vw2 && vh2) {
-          const imgAspectRatio = vw2 / vh2;
-          const canvasAspectRatio = cw / ch;
-
-          let drawWidth = cw;
-          let drawHeight = ch;
-
-          if (imgAspectRatio > canvasAspectRatio) {
-            drawHeight = cw / imgAspectRatio;
-          } else {
-            drawWidth = ch * imgAspectRatio;
-          }
-
-          drawWidth *= imageScale;
-          drawHeight *= imageScale;
-
-          const drawX = (cw - drawWidth) / 2 + lowerOffset.x;
-          const drawY = (ch - drawHeight) / 2 + lowerOffset.y;
-          const cropTop = vh2 * 0.5; // یک‌سوم بالا را حذف کنیم
-          const cropHeight = vh2 - cropTop;
-
-          ctx.drawImage(
-            videoElement,
-            0,
-            cropTop, // از یک‌سوم بالا شروع کن
-            vw2,
-            cropHeight, // فقط ۲/۳ پایین رو بگیر
-            drawX,
-            drawY,
-            drawWidth,
-            drawHeight,
-          );
-          // ctx.drawImage(videoElement, drawX, drawY, drawWidth, drawHeight);
+        if (imgAspectRatio > canvasAspectRatio) {
+          drawHeight = cw / imgAspectRatio;
+        } else {
+          drawWidth = ch * imgAspectRatio;
         }
+        drawWidth *= imageScale;
+        drawHeight *= imageScale;
+        const drawX = (cw - drawWidth) / 2 + lowerOffset.x;
+        const drawY = (ch - drawHeight) / 2 + lowerOffset.y;
+        const cropTop = vh2 * 0.28;
+        const cropHeight = vh2 - cropTop;
 
+        ctx.filter = 'brightness(1.05) contrast(1.1)';
+        ctx.drawImage(videoElement, 0, cropTop, vw2, cropHeight, drawX, drawY, drawWidth, drawHeight);
+
+        // رسم سر با شفاف‌سازی 50 پیکسل پایینی
         const scaledVideoWidth = cw * videoScale;
         const scaledVideoHeight = (ch / 2) * videoScale;
         const videoX = (cw - scaledVideoWidth) / 2 + videoOffset.x;
         const videoY = videoOffset.y;
 
-        // فقط 40 درصد بالایی ویدئو را بکش:
-        ctx.drawImage(
-          tmpCanvas,
-          0,
-          0,
-          vw,
-          vh,
-          videoX,
-          videoY,
-          scaledVideoWidth,
-          scaledVideoHeight,
-        );
+        ctx.drawImage(tmpCanvas, 0, 0, vw, vh * 0.45, videoX, videoY, scaledVideoWidth, scaledVideoHeight * 0.65);
 
-        // const cropHeadHeight = vh  * 0.6; // فقط نیمه بالایی
-        // ctx.drawImage(
-        //   tmpCanvas,
-        //   0, 0,         // مبدا برش
-        //   vw, cropHeadHeight, // فقط نصف بالا
-        //   videoX, videoY,
-        //   scaledVideoWidth,
-        //   (scaledVideoHeight / 2), // یا تناسب‌دار بکشی
-        // );
+        // اعمال گرادیان شفافیت برای 50 پیکسل پایینی سر
+        const transparentHeight = 50;
+        const gradientY = videoY + scaledVideoHeight * 0.65 - transparentHeight;
+        const gradient = ctx.createLinearGradient(0, gradientY, 0, gradientY + transparentHeight);
+
+        // gradient.addColorStop(0, "rgba(255,255,255,1)");
+        // gradient.addColorStop(0.5, "rgba(255,255,255,0.5)");
+        // gradient.addColorStop(1, "rgba(255,255,255,0)");
+        ctx.fillStyle = gradient;
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillRect(videoX, gradientY, scaledVideoWidth, transparentHeight);
+        ctx.globalCompositeOperation = 'source-over';
 
         requestAnimationFrame(draw);
       };
 
       requestAnimationFrame(draw);
 
-      return () => {
-        canvas.removeEventListener("wheel", handleWheel);
-        canvas.removeEventListener("mousedown", handleMouseDown);
-        canvas.removeEventListener("mousemove", handleMouseMove);
-        canvas.removeEventListener("mouseup", handleMouseUp);
-        canvas.removeEventListener("mouseleave", handleMouseUp);
-      };
+      // return () => {
+      //   canvas.removeEventListener("wheel", handleWheel);
+      //   canvas.removeEventListener("mousedown", handleMouseDown);
+      //   canvas.removeEventListener("mousemove", handleMouseMove);
+      //   canvas.removeEventListener("mouseup", handleMouseUp);
+      //   canvas.removeEventListener("mouseleave", handleMouseUp);
+      // };
     }, [
       isLoaded,
       ref,
@@ -335,6 +304,19 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
     }, [ref]);
 
     useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.ctrlKey && e.key.toLowerCase() === "i") {
+          e.preventDefault();
+          setShowControlPanel((prev) => !prev);
+        }
+      };
+
+      window.addEventListener("keydown", handleKeyDown);
+
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, []);
+
+    useEffect(() => {
       if (!ref || typeof ref !== "object" || !ref.current) return;
       const video = ref.current;
       const fetchConfig = async () => {
@@ -353,23 +335,8 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
         }
       };
 
-      // fetchConfig();
+      fetchConfig();
     }, [ref]);
-
-    useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.ctrlKey && e.key.toLowerCase() === "i") {
-          e.preventDefault();
-          setShowControlPanel((prev) => !prev);
-        }
-      };
-
-      window.addEventListener("keydown", handleKeyDown);
-
-      return () => {
-        window.removeEventListener("keydown", handleKeyDown);
-      };
-    }, []);
 
     return (
       <div className="relative bg-white w-full h-full">
@@ -377,14 +344,9 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
           <div className="absolute flex flex-col top-3 left-3 bg-black text-white rounded-lg px-3 py-2 z-20">
             Connection Quality: {connectionQuality}
             <Button
-              className=" top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-20"
+              className="top-3 right-3 !p-2 bg-zinc-700 bg-opacity-50 z-20"
               onClick={async () => {
-                const config = {
-                  videoOffset,
-                  videoScale,
-                  lowerOffset,
-                  imageScale,
-                };
+                const config = { videoOffset, videoScale, lowerOffset, imageScale };
 
                 try {
                   await fetch("/api/save-avatar-config", {
@@ -434,7 +396,7 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
           />
           <video
-            ref={lowerBodyRef as React.MutableRefObject<HTMLVideoElement>}
+            ref={lowerBodyRef}
             src="/videos/lower-body.mp4"
             autoPlay
             loop
@@ -449,7 +411,6 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
               height: "1px",
             }}
           />
-
           {!videoVisible && (
             <video
               ref={fallbackVideoRef}
@@ -461,57 +422,41 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
             />
           )}
         </>
-        {/* )} */}
-
         {!isLoaded && (
           <div className="absolute inset-0 flex items-center justify-center">
             Loading...
           </div>
         )}
-
-        {/* Controls for lower-body image */}
         {showControlPanel && (
-          <div className="absolute  bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col gap-2 items-center bg-white bg-opacity-70 p-2 rounded">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col gap-2 items-center bg-white bg-opacity-70 p-2 rounded">
             <div className="flex gap-2">
-              <button
-                onClick={() => setLowerOffset((p) => ({ ...p, y: p.y - 10 }))}
-              >
+              <button onClick={() => setLowerOffset((p) => ({ ...p, y: p.y - 10 }))}>
                 ⬆️
               </button>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => setLowerOffset((p) => ({ ...p, x: p.x - 10 }))}
-              >
+              <button onClick={() => setLowerOffset((p) => ({ ...p, x: p.x - 10 }))}>
                 ⬅️
               </button>
-              <button
-                onClick={() => setLowerOffset((p) => ({ ...p, x: p.x + 10 }))}
-              >
+              <button onClick={() => setLowerOffset((p) => ({ ...p, x: p.x + 10 }))}>
                 ➡️
               </button>
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={() => setLowerOffset((p) => ({ ...p, y: p.y + 10 }))}
-              >
+              <button onClick={() => setLowerOffset((p) => ({ ...p, y: p.y + 10 }))}>
                 ⬇️
               </button>
             </div>
             <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => setImageScale((p) => Math.min(p + 0.1, 3))}
-              >
+              <button onClick={() => setImageScale((p) => Math.min(p + 0.1, 3))}>
                 ➕ Zoom In
               </button>
-              <button
-                onClick={() => setImageScale((p) => Math.max(p - 0.1, 0.2))}
-              >
+              <button onClick={() => setImageScale((p) => Math.max(p - 0.1, 0.2))}>
                 ➖ Zoom Out
               </button>
             </div>
             <p className="text-xs text-gray-600 mt-1">
-              Use <b>Shift + Mouse</b> to zoom/move video
+              Use <b>Shift + Arrow Keys</b> to move video, <b>Shift + Wheel</b> to zoom
             </p>
           </div>
         )}
