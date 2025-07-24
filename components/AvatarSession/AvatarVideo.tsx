@@ -162,8 +162,8 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
           videoDrawHeight = ch;
           videoDrawWidth = videoDrawHeight * videoAspectRatio;
         }
-        const videoX = (cw - videoDrawWidth) / 2 + videoOffset.x;
-        const videoY = (ch - videoDrawHeight) / 2 + videoOffset.y;
+        const videoX =0 //(cw - videoDrawWidth) / 2 + videoOffset.x;
+        const videoY = 0//(ch - videoDrawHeight) / 2 + videoOffset.y;
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(video, 0, 0, vw, vh, videoX, videoY, videoDrawWidth, videoDrawHeight);
 
@@ -194,7 +194,7 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
       };
 
       requestAnimationFrame(draw);
-    }, [isLoaded, ref, bgImageLoaded, videoReady]);
+    }, [isLoaded, ref, bgImageLoaded, videoReady, legsOffset, legsScale, videoOffset, videoScale]);
 
     useEffect(() => {
       if (!ref || typeof ref !== "object" || !ref.current) return;
