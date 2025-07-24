@@ -44,7 +44,7 @@ import TicketInfo from "@/types/ticketInfo";
 import { ConfirmEditableForm } from "./ConfirmEditableForm";
 import { Passenger } from "@/lib/types";
 
-import { FullBodyAvatarVideo } from "./FullBodyAvatarVideo";
+
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.High,
@@ -65,8 +65,8 @@ const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   version: "v2",
   useSilencePrompt: false,
   enableRecognitionSTT: true, // فیلد جدید
-  activityIdleTimeout: 900,
-  disableIdleTimeout: true,
+  activityIdleTimeout: 120, // 2 دقیقه
+  disableIdleTimeout: false,
 };
 
 function similarity(a: string, b: string) {
@@ -146,6 +146,7 @@ function InteractiveAvatar() {
   );
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -299,6 +300,9 @@ function InteractiveAvatar() {
           clearInterval(keepAliveIntervalRef.current);
           keepAliveIntervalRef.current = null;
         }
+        if (sessionId) {
+          closeSession(sessionId);
+        }
       });
       avatar.on(StreamingEvents.STREAM_READY, (event) => {
         console.log(">>>>> Stream ready:", event.detail);
@@ -319,8 +323,13 @@ function InteractiveAvatar() {
         console.log(">>>>> Avatar talking message:", event);
       });
 
-      await startAvatar(config);
+      const data = await startAvatar(config);
 
+      // if (data && data.session_id) {
+      //   setSessionId(data.session_id);
+      // }
+      console.log(data)
+      
       if (isVoiceChat) {
         await startVoiceChat(true);
       }
@@ -330,13 +339,28 @@ function InteractiveAvatar() {
     }
   });
 
-  useUnmount(() => {
-    stopAvatar();
-    if (keepAliveIntervalRef.current) {
-      clearInterval(keepAliveIntervalRef.current);
-      keepAliveIntervalRef.current = null;
+  // تابع برای بستن سشن در سرور
+  async function closeSession(sessionId: string) {
+    try {
+      await fetch("/api/close-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+    } catch (e) {
+      console.warn("Failed to close session", e);
     }
-  });
+  }
+
+  // اطمینان از بسته شدن سشن هنگام خروج از کامپوننت یا disconnect
+  useEffect(() => {
+    return () => {
+      stopAvatar();
+      if (sessionId) {
+        closeSession(sessionId);
+      }
+    };
+  }, [sessionId]);
 
   useEffect(() => {
     if (stream && mediaStream.current) {
@@ -378,24 +402,28 @@ function InteractiveAvatar() {
               luggageCount: p.luggageCount,
             })),
           };
-          debugger;
-          // ذخیره در دیتابیس
           const saved = await saveTrip(tripData);
-          // حالا می‌توانی id را ذخیره کنی و مرحله بعد (نمایش QRCode) را انجام دهی
-          setTripId(saved.id); // فرض: خروجی شامل id است
-          setShowForm(false); // فرم را نباید نمایش دهی
-          setShowQRCode(true); // مرحله بعدی: نمایش QRCode
-          debugger;
-          stopAvatar();
+          setTripId(saved.id);
+          setShowForm(false);
+          setShowQRCode(true);
+          // stopAvatar();
         })
-        .catch((err) => {
-          // هندل خطا
-          debugger;
-          console.log(err);
+        .catch(async (err) => {
+          // ساخت داده خالی
+          const emptyTripData = {
+            airportName: "",
+            travelDate: "",
+            flightNumber: "",
+            passengers: [],
+          };
+          // ذخیره در دیتابیس با داده خالی
+          const saved = await saveTrip(emptyTripData);
+          setTripId(0); // یا setTripId(saved.id) اگر می‌خواهید id دیتابیس را بگیرید
+          setShowForm(false);
+          setShowQRCode(true);
           // stopAvatar();
         });
     }
-    // ریست flag وقتی فرم بسته شد
     if (!isQrCodeMode && extractedOnce) {
       setExtractedOnce(false);
     }
@@ -428,31 +456,51 @@ function InteractiveAvatar() {
     setIsQrCodeMode(false);
   };
 
+  // QRCode را بعد از ۲ دقیقه مخفی کن
+  useEffect(() => {
+    if (showQRCode) {
+      const timer = setTimeout(() => setShowQRCode(false), 120000); // 2 دقیقه
+      return () => clearTimeout(timer);
+    }
+  }, [showQRCode]);
+
   return (
     <div className="w-full h-full flex flex-col gap-4">
       <div className="flex flex-col rounded-xl bg-zinc-900 overflow-hidden">
         <div className="relative w-full aspect-video overflow-hidden flex flex-col items-center justify-center">
-          {showQRCode && tripId ? (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-              }}
-            >
-              <h2>برای مشاهده و ویرایش بلیط، QR را اسکن کنید:</h2>
-              <QRCode value={`${window.location.origin}/ticket/${tripId}`} />
-              <p>
-                یا <a href={`/ticket/${tripId}`}>اینجا کلیک کنید</a>
-              </p>
-            </div>
-          ) : sessionState !== StreamingAvatarSessionState.INACTIVE &&
-            !showQRCode &&
-            !tripId ? (
-            <AvatarVideo ref={mediaStream} avatar={avatar} />
-          ) : (
-
+          {sessionState === StreamingAvatarSessionState.INACTIVE ? (
             <AvatarConfig config={config} onConfigChange={setConfig} />
+          ) : (
+            <>
+              <AvatarVideo ref={mediaStream} avatar={avatar} />
+              {showQRCode && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 16,
+                    left: 16,
+                    background: "white",
+                    borderRadius: 8,
+                    padding: 12,
+                    zIndex: 30,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    minWidth: 120,
+                    minHeight: 120,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                  }}
+                >
+                  <h2 style={{ fontSize: 14, marginBottom: 8 }}>
+                    برای مشاهده و ویرایش بلیط، QR را اسکن کنید:
+                  </h2>
+                  <QRCode value={`${window.location.origin}/ticket/${tripId}`} size={96} />
+                  <a href={`/ticket/${tripId}`} style={{ fontSize: 12, marginTop: 8 }}>
+                    اینجا کلیک کنید
+                  </a>
+                </div>
+              )}
+            </>
           )}
         </div>
         <div className="flex flex-col gap-3 items-center justify-center p-4 border-t border-zinc-700 w-full">
