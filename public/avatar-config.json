@@ -3,15 +3,10 @@
     "x": 0,
     "y": 0
   },
-  "videoScale": 3.349999999999995,
-  "lowerOffset": {
-    "x": -20,
-    "y": -260
-  },
-  "imageScale": 1.35,
   "legsOffset": {
-    "x": -30,
-    "y": -30
+    "x": 420,
+    "y": 0
   },
-  "legsScale": 1.4500000000000004
+  "legsScale": 1,
+  "videoScale": 1.5999999999999996
 }
