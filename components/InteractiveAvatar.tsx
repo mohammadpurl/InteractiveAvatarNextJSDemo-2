@@ -44,8 +44,6 @@ import TicketInfo from "@/types/ticketInfo";
 import { ConfirmEditableForm } from "./ConfirmEditableForm";
 import { Passenger } from "@/lib/types";
 
-
-
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.High,
   avatarName: AVATARS[0].avatar_id,
@@ -147,7 +145,6 @@ function InteractiveAvatar() {
   const [isDisconnected, setIsDisconnected] = useState(false);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [status, setStatus] = useState("");
@@ -251,24 +248,29 @@ function InteractiveAvatar() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 'b') {
+      if (e.ctrlKey && e.key.toLowerCase() === "b") {
         e.preventDefault();
         setShowDebugPanel((prev) => !prev);
       }
     };
-  
+
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
-  
 
   // ریست کردن isDisconnected هنگام شروع مجدد سشن
   const startSessionV2 = useMemoizedFn(async (isVoiceChat: boolean) => {
     setIsDisconnected(false);
     try {
       const newToken = await fetchAccessToken();
+
+      if (newToken === "Failed to retrieve access token") {
+        console.log(`sessionState is ${sessionState}`);
+
+        return;
+      }
       const avatar = initAvatar(newToken);
 
       setAvatar(avatar);
@@ -328,8 +330,8 @@ function InteractiveAvatar() {
       // if (data && data.session_id) {
       //   setSessionId(data.session_id);
       // }
-      console.log(data)
-      
+      console.log(data);
+
       if (isVoiceChat) {
         await startVoiceChat(true);
       }
@@ -417,10 +419,10 @@ function InteractiveAvatar() {
             passengers: [],
           };
           // ذخیره در دیتابیس با داده خالی
-          const saved = await saveTrip(emptyTripData);
           setTripId(0); // یا setTripId(saved.id) اگر می‌خواهید id دیتابیس را بگیرید
           setShowForm(false);
           setShowQRCode(true);
+          const saved = await saveTrip(emptyTripData);
           // stopAvatar();
         });
     }
@@ -494,8 +496,14 @@ function InteractiveAvatar() {
                   <h2 style={{ fontSize: 14, marginBottom: 8 }}>
                     برای مشاهده و ویرایش بلیط، QR را اسکن کنید:
                   </h2>
-                  <QRCode value={`${window.location.origin}/ticket/${tripId}`} size={96} />
-                  <a href={`/ticket/${tripId}`} style={{ fontSize: 12, marginTop: 8 }}>
+                  <QRCode
+                    value={`${window.location.origin}/ticket/${tripId}`}
+                    size={96}
+                  />
+                  <a
+                    href={`/ticket/${tripId}`}
+                    style={{ fontSize: 12, marginTop: 8 }}
+                  >
                     اینجا کلیک کنید
                   </a>
                 </div>
@@ -504,7 +512,8 @@ function InteractiveAvatar() {
           )}
         </div>
         <div className="flex flex-col gap-3 items-center justify-center p-4 border-t border-zinc-700 w-full">
-          {sessionState === StreamingAvatarSessionState.CONNECTED && showDebugPanel ? (
+          {sessionState === StreamingAvatarSessionState.CONNECTED &&
+          showDebugPanel ? (
             <AvatarControls />
           ) : sessionState === StreamingAvatarSessionState.INACTIVE ? (
             <div>
@@ -522,14 +531,15 @@ function InteractiveAvatar() {
                 </Button>
               </div>
             </div>
-          ) :  sessionState !== StreamingAvatarSessionState.CONNECTED && (
-            <LoadingIcon />
+          ) : (
+            sessionState !== StreamingAvatarSessionState.CONNECTED && (
+              <LoadingIcon />
+            )
           )}
         </div>
       </div>
-      {sessionState === StreamingAvatarSessionState.CONNECTED  && showDebugPanel &&  (
-        <MessageHistory />
-      )}
+      {sessionState === StreamingAvatarSessionState.CONNECTED &&
+        showDebugPanel && <MessageHistory />}
     </div>
   );
 }
