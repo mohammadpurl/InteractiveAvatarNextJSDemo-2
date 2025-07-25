@@ -133,6 +133,8 @@ function removeConsecutiveDuplicates(text: string) {
 function InteractiveAvatar() {
   const { initAvatar, startAvatar, stopAvatar, sessionState, stream } =
     useStreamingAvatarSession();
+
+  const { clearMessages } = useStreamingAvatarContext();
   const { startVoiceChat } = useVoiceChat();
   const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const [config, setConfig] =
@@ -157,7 +159,7 @@ function InteractiveAvatar() {
     useStreamingAvatarContext();
   const [showForm, setShowForm] = useState<boolean>(false);
   const [showQRCode, setShowQRCode] = useState(false);
-  const [tripId, setTripId] = useState(0);
+  const [tripId, setTripId] = useState("0");
   const { messages } = useMessageHistory();
   const [defaultFormData, setDefaultFormData] = useState<TicketInfo>({
     airportName: "",
@@ -255,6 +257,7 @@ function InteractiveAvatar() {
     };
 
     window.addEventListener("keydown", handleKeyDown);
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -389,10 +392,9 @@ function InteractiveAvatar() {
   const [extractedOnce, setExtractedOnce] = useState(false);
 
   useEffect(() => {
-    debugger;
-    // if (isQrCodeMode && !isAvatarTalking && !extractedOnce) {
-    if (isQrCodeMode) {
+    if (isQrCodeMode && !extractedOnce) {
       setExtractedOnce(true);
+      setIsQrCodeMode(false);
       extractPassengerDataWithOpenAI(messages)
         .then(async (data) => {
           // تبدیل داده به فرمت مورد نیاز
@@ -408,9 +410,12 @@ function InteractiveAvatar() {
           };
           debugger;
           const saved = await saveTrip(tripData);
+
           setTripId(saved.id);
           setShowForm(false);
           setShowQRCode(true);
+          clearMessages();
+          
           // stopAvatar();
         })
         .catch(async (err) => {
@@ -423,15 +428,14 @@ function InteractiveAvatar() {
           };
           // ذخیره در دیتابیس با داده خالی
           debugger;
-          setTripId(0); // یا setTripId(saved.id) اگر می‌خواهید id دیتابیس را بگیرید
+          setIsQrCodeMode(false);
+          setTripId("0"); // یا setTripId(saved.id) اگر می‌خواهید id دیتابیس را بگیرید
           setShowForm(false);
           setShowQRCode(true);
           const saved = await saveTrip(emptyTripData);
+          clearMessages();
           // stopAvatar();
         });
-    }
-    if (!isQrCodeMode && extractedOnce) {
-      setExtractedOnce(false);
     }
   }, [isQrCodeMode, isAvatarTalking, messages]);
 
@@ -455,17 +459,13 @@ function InteractiveAvatar() {
     setDefaultFormData(defaultFormData);
   }, [ticketInfo, isQrCodeMode]);
 
-  const handleConfirm = (formData: any) => {
-    // Do something with the confirmed form data, e.g. send to API or update state
-    console.log("Confirmed form data:", formData);
-    // Optionally, you can close the QR code mode or show a success message
-    setIsQrCodeMode(false);
-  };
-
   // QRCode را بعد از ۲ دقیقه مخفی کن
   useEffect(() => {
     if (showQRCode) {
-      const timer = setTimeout(() => setShowQRCode(false), 120000); // 2 دقیقه
+      const timer = setTimeout(() => {
+        setShowQRCode(false);
+        setExtractedOnce(false);
+      }, 120000); // 2 دقیقه
       return () => clearTimeout(timer);
     }
   }, [showQRCode]);
@@ -507,6 +507,7 @@ function InteractiveAvatar() {
                   <a
                     href={`/ticket/${tripId}`}
                     style={{ fontSize: 12, marginTop: 8 }}
+                    className="text-black"
                   >
                     اینجا کلیک کنید
                   </a>
