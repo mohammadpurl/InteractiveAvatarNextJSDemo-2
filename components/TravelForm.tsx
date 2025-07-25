@@ -20,28 +20,7 @@ const TravelForm: React.FC<TravelFormProps> = ({ initialData }) => {
   const { toast } = useToast();
 
   const [travelData, setTravelData] = useState<TicketInfo>(initialData)
-  //   {
-  //   airportName: "نیویورک",
-  //   travelDate: "مرداد ۱۴۰۴",
-  //   flightNumber: "243",
-  //   passengers: [
-  //     {
-  //       fullName: "لیلا محمدپور",
-  //       nationalId: "6179802362",
-  //       luggageCount: 1,
-  //     },
-  //     {
-  //       fullName: "ملیحه محمدپور",
-  //       nationalId: "6179802823",
-  //       luggageCount: 1,
-  //     },
-  //     {
-  //       fullName: "ندا محمدپور",
-  //       nationalId: "6170059117",
-  //       luggageCount: 1,
-  //     },
-  //   ],
-  // });
+  
 
   const handleBasicInfoChange = (
     field: keyof Pick<TicketInfo, "airportName" | "flightNumber">,
@@ -194,10 +173,10 @@ const TravelForm: React.FC<TravelFormProps> = ({ initialData }) => {
               <Button
                 onClick={addPassenger}
                 size="sm"
-                className="bg-golden-accent text-accent-foreground hover:bg-golden-accent/90 text-sm shadow-course transition-transform duration-300 ease-out hover:scale-105"
+                className="bg-golden-accent text-accent-foreground hover:bg-golden-accent/90 text-sm shadow-course transition-transform duration-300 ease-out hover:scale-105 border border-blue-500 shadow-[0px_5px_20px_rgba(0,173,255,0.2)] "
               >
                 <Plus className="w-4 h-4 ml-1" />
-                <span className="hidden sm:inline bg-gradient-to-r from-[#51baff] to-[#2fa4ff] bg-clip-text text-transparent text-lg">افزودن مسافر</span>
+                <span className="hidden sm:inline bg-gradient-to-r from-[#51baff] to-[#2fa4ff] bg-clip-text text-transparent text-lg ">افزودن مسافر</span>
                 <span className="sm:hidden bg-gradient-to-r from-[#51baff] to-[#2fa4ff] bg-clip-text text-transparent ">افزودن</span>
               </Button>
             </CardTitle>
@@ -310,13 +289,14 @@ const TravelForm: React.FC<TravelFormProps> = ({ initialData }) => {
         </Card>
 
         {/* Action Buttons */}
-        <div className="flex justify-center gap-4 px-4">
+        <div className="flex justify-end gap-4 p-4 border-golden-accent  border border-[#f5a623]/20 bg-[#0d0c1d] shadow-course">
           <Button
             onClick={handleSubmit}
             size="lg"
-            className="bg-golden-accent text-accent-foreground hover:bg-golden-accent/90 px-6 sm:px-8 text-sm sm:text-base shadow-course transition-transform duration-300 ease-out hover:scale-105"
+            // className="bg-golden-accent text-accent-foreground hover:bg-golden-accent/90 px-6 sm:px-8 text-sm sm:text-base shadow-course transition-transform duration-300 ease-out hover:scale-105"
+            className="bg-golden-accent text-accent-foreground hover:bg-golden-accent/90 text-sm shadow-course transition-transform duration-300 ease-out hover:scale-105 border border-blue-500 shadow-[0px_5px_20px_rgba(0,173,255,0.2)] "
           >
-            کپی اطلاعات JSON
+            <span className="hidden sm:inline bg-gradient-to-r from-[#51baff] to-[#2fa4ff] bg-clip-text text-transparent text-lg ">تایید و پرداخت</span>
           </Button>
         </div>
 
