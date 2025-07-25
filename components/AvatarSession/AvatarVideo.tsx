@@ -303,7 +303,7 @@ export const AvatarVideo = forwardRef<HTMLVideoElement, { avatar: any }>(
     return (
       <div className="relative bg-white w-full h-full">
         {connectionQuality !== ConnectionQuality.UNKNOWN && (
-          <div className="absolute flex flex-col top-3 left-3 bg-black text-white rounded-lg px-3 py-2 z-20">
+          <div className="absolute flex flex-col top-4 left-4 bg-black text-white rounded-lg px-3 py-2 z-20">
             Connection Quality: {connectionQuality}
             {showLegsControlPanel && (
               <Button
