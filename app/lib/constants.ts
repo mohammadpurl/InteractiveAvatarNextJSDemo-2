@@ -1,13 +1,13 @@
 export const AVATARS = [  
-  {
-    avatar_id:"ff3065a057ba46e4a3829b1aeab0f72e",
-    name: "Moeid",
-  },
+  
   {
     avatar_id:"Graham_Black_Suit_public",
     name: "Graham SuitLook",
   },
- 
+ {
+    avatar_id:"ff3065a057ba46e4a3829b1aeab0f72e",
+    name: "Moeid",
+  },
   {
     avatar_id: "Graham_ProfessionalLook_public",
     name: "Graham ProfessionalLook",
