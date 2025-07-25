@@ -4,9 +4,9 @@
     "y": 0
   },
   "legsOffset": {
-    "x": 420,
+    "x": -55,
     "y": 0
   },
-  "legsScale": 1,
+  "legsScale": 1.005,
   "videoScale": 1.5999999999999996
 }
