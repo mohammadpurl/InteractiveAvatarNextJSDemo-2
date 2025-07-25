@@ -389,7 +389,9 @@ function InteractiveAvatar() {
   const [extractedOnce, setExtractedOnce] = useState(false);
 
   useEffect(() => {
-    if (isQrCodeMode && !isAvatarTalking && !extractedOnce) {
+    debugger;
+    // if (isQrCodeMode && !isAvatarTalking && !extractedOnce) {
+    if (isQrCodeMode) {
       setExtractedOnce(true);
       extractPassengerDataWithOpenAI(messages)
         .then(async (data) => {
@@ -404,6 +406,7 @@ function InteractiveAvatar() {
               luggageCount: p.luggageCount,
             })),
           };
+          debugger;
           const saved = await saveTrip(tripData);
           setTripId(saved.id);
           setShowForm(false);
@@ -419,6 +422,7 @@ function InteractiveAvatar() {
             passengers: [],
           };
           // ذخیره در دیتابیس با داده خالی
+          debugger;
           setTripId(0); // یا setTripId(saved.id) اگر می‌خواهید id دیتابیس را بگیرید
           setShowForm(false);
           setShowQRCode(true);
