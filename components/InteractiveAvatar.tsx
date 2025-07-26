@@ -16,6 +16,7 @@ import {
   extractPassengerDataWithOpenAI,
   saveTrip,
 } from "../services/api";
+import { parsePersianDate } from "@/lib/utils";
 
 import { Button } from "./Button";
 import { AvatarConfig } from "./AvatarConfig";
@@ -40,9 +41,8 @@ import { useReservationState } from "./logic/useReservationState";
 
 import { AVATARS } from "@/app/lib/constants";
 import knowledgeBase from "@/app/constants/Knowledge";
-import TicketInfo from "@/types/ticketInfo";
 import { ConfirmEditableForm } from "./ConfirmEditableForm";
-import { Passenger } from "@/lib/types";
+import { Passenger, TicketInfo } from "@/lib/types";
 
 const DEFAULT_CONFIG: ExtendedStartAvatarRequest = {
   quality: AvatarQuality.High,
@@ -171,7 +171,7 @@ function InteractiveAvatar() {
         luggageCount: 0,
       },
     ],
-    travelDate: "",
+    travelDate: null,
   });
 
   const recognitionRef = useAutoSTT(
@@ -415,7 +415,7 @@ function InteractiveAvatar() {
           setShowForm(false);
           setShowQRCode(true);
           clearMessages();
-          
+
           // stopAvatar();
         })
         .catch(async (err) => {
@@ -440,15 +440,14 @@ function InteractiveAvatar() {
   }, [isQrCodeMode, isAvatarTalking, messages]);
 
   useEffect(() => {
-    const defaultFormData = {
+    const defaultFormData: TicketInfo = {
       airportName: ticketInfo.airportName ?? "",
-      flightType: ticketInfo.flightType ?? "خروجی",
-      travelDate: ticketInfo.travelDate ?? "",
+      travelDate: ticketInfo.travelDate
+        ? typeof ticketInfo.travelDate === "string"
+          ? parsePersianDate(ticketInfo.travelDate)
+          : ticketInfo.travelDate
+        : null,
       flightNumber: ticketInfo.flightNumber ?? "",
-      luggageCount: ticketInfo.passengers.reduce(
-        (sum, p) => sum + (p.luggageCount || 0),
-        0,
-      ),
       passengers: ticketInfo.passengers.map((p) => ({
         fullName: p.fullName || "",
         nationalId: p.nationalId || "",
