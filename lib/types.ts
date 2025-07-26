@@ -1,4 +1,5 @@
 import { ReactNode } from "react"
+import { DateObject } from "react-multi-date-picker"
 
 export interface NavItem {
   label: string
@@ -16,7 +17,7 @@ export interface Passenger {
 export interface TicketInfo {
   airportName?: string;
   flightType?: "ورودی" | "خروجی";
-  travelDate?: string;
+  travelDate?: string | DateObject | null;
   flightNumber?: string;
   passengers: Passenger[];
 }
