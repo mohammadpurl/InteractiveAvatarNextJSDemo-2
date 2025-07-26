@@ -36,8 +36,8 @@ export default function RootLayout({
       lang="en"
     >
       <head />
-      <body className="bg-black text-white overflow-hidden">
-        <main className="relative w-screen h-screen overflow-hidden">
+      <body className="bg-black text-white">
+        <main className="relative w-full min-h-screen">
           {/* <NavBar /> */}
           {children}
         </main>
