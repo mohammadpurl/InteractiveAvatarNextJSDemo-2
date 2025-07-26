@@ -28,9 +28,11 @@ async function getTripData(tripId: string): Promise<TicketInfo> {
       })),
     };
   } else {
+    // برای Server Component، تاریخ را به صورت رشته برمی‌گردانیم
+    // تا بتواند به Client Component منتقل شود
     return {
-      airportName: "",
-      travelDate: "",
+      airportName: "امام خمینی",
+      travelDate: "1404/05/28", // رشته تاریخ
       flightNumber: "",
       passengers: [
         {
